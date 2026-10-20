@@ -64,6 +64,7 @@ HaloDeck/
 │   ├── bridge_fase2b.py         Bridge terintegrasi (JALANKAN INI)
 │   ├── aksi.py                  20 aksi: LOCK, MUTE, makro PS/PR, dll
 │   ├── connector_app.py         Konektor tray (auto-start Windows)
+│   ├── ui_jendela.py            Jendela UI tkinter (status, makro, log)
 │   ├── versi.py                 Nomor versi (satu-satunya sumber)
 │   ├── updater.py               Pembaruan otomatis dari GitHub Releases
 │   └── update_config.json       Repo rilis + preferensi pembaruan
@@ -114,28 +115,42 @@ esptool.py --port COM4 --baud 460800 write_flash 0x0 HaloDeck-ESP-1.0.0.bin
 
 ### 2. Konektor Windows (OTOMATIS — tidak perlu dijalankan manual)
 Aplikasi konektor berjalan **otomatis bersama Windows** sebagai tray icon,
-tanpa jendela konsol.
+dengan **jendela UI** yang bisa dibuka kapan saja.
 
 - **Status otomatis:** terdaftar di Startup Windows (Registry HKCU Run) —
   menyala sendiri saat login, mati sendiri saat logout.
 - **Tray icon:** titik **hijau** = ESP tersambung, **merah** = masih mencari.
+- **Jendela UI** (klik ganda ikon tray, atau menu *Buka Jendela*):
+  - kartu **status** — koneksi ESP, profil aktif, jumlah aksi, port
+  - **tombol makro** — klik langsung dieksekusi di PC (kunci PC, mute,
+    undo/redo, makro Photoshop & Premiere); berguna saat HP sedang tidak
+    dipegang
+  - **pembaruan** — versi saat ini, *Periksa Pembaruan*, *Pasang Pembaruan*
+  - pengaturan **mulai otomatis** & **jalankan ulang koneksi**
+  - **log langsung** — isi `konektor.log` tampil & mengalir sendiri
+  - menutup jendela hanya **menyembunyikannya** ke tray; benar-benar keluar
+    lewat tombol *Keluar* atau menu tray
 - **Menu tray** (klik kanan ikon):
   - *Status / Profil aktif / Jumlah aksi* — pantauan langsung
+  - *Buka Jendela* — buka UI (klik ganda tray = hal yang sama)
   - *Jalankan Ulang Koneksi* — sambung ulang ke ESP
   - *Mulai Otomatis Bersama Windows* — toggle on/off
   - *Buka Berkas Log* — lihat riwayat di `pc_bridge/konektor.log`
+  - *Unduh Berkas Lain (Firmware & APK)* — buka halaman rilis di peramban
   - *Versi … / Periksa Pembaruan / Pasang Pembaruan* — pembaruan otomatis
   - *Keluar*
 
 Menjalankan manual (hanya bila perlu):
 ```
-pythonw <folder-hasil-instalasi>\app\connector_app.py
+pythonw <folder-hasil-instalasi>\app\connector_app.py            # tray saja
+pythonw <folder-hasil-instalasi>\app\connector_app.py --buka-ui  # + jendela UI
 ```
 > `pythonw` (bukan `python`) agar tanpa jendela konsol. Aman dijalankan
 > berkali-kali — aplikasi kedua otomatis keluar (anti double-instance).
 
 Berkas:
 - `connector_app.py` — aplikasi konektor (tray + auto-start)
+- `ui_jendela.py` — jendela UI tkinter (status, tombol makro, log, update)
 - `versi.py` — nomor versi aplikasi PC (satu-satunya sumber)
 - `updater.py` + `update_config.json` — pembaruan otomatis (bagian 4)
 - `konektor.log` — riwayat log (heartbeat PONG sengaja tidak dicatat)

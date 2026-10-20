@@ -295,6 +295,10 @@ class KonektorTray:
         self.bridge = KonektorBridge()
         self.lock_instance = kunci_instance()
         self.tray = None
+        self.jendela = None                    # Jendela UI (tkinter), bila tersedia
+        self.port_target = PORT_TARGET         # dibaca UI untuk ditampilkan
+        self.baud_rate = BAUD_RATE
+        self.versi_app = VERSI
         # Pengelola pembaruan dari GitHub Releases (lihat updater.py)
         self.updater = updater.PengelolaUpdate(
             pencatat=catat,
@@ -318,8 +322,9 @@ class KonektorTray:
             pystray.MenuItem(self._teks_profil, None, enabled=False),
             pystray.MenuItem(self._teks_aksi, None, enabled=False),
             pystray.MenuItem(None, None, enabled=False),   # Pemisah
-            pystray.MenuItem("Jalankan Ulang Koneksi", self._ulang,
+            pystray.MenuItem("Buka Jendela", self._buka_jendela,
                              default=True),
+            pystray.MenuItem("Jalankan Ulang Koneksi", self._ulang),
             pystray.MenuItem("Mulai Otomatis Bersama Windows",
                              self._toggle_autostart,
                              checked=lambda item: auto_start_aktif()),
@@ -341,7 +346,51 @@ class KonektorTray:
                                  "HaloDeck Konektor", menu)
         # Perbarui ikon/teks berkala sesuai status
         threading.Thread(target=self._pantau_ui, daemon=True).start()
-        self.tray.run()
+
+        # --- Mode UI: jendela tkinter jadi loop utama, tray di thread sendiri.
+        #     Bila tkinter tidak tersedia, kembali ke mode tray murni.
+        self.jendela = self._buat_jendela()
+        if self.jendela is None:
+            self.tray.run()
+            return
+        try:
+            self.tray.run_detached()
+        except Exception as galat:
+            catat(f"Mode detached tidak jalan ({galat}) -> mode tray saja.")
+            self.jendela = None
+            self.tray.run()
+            return
+        catat("Jendela UI siap — menutup jendela hanya menyembunyikannya "
+              "ke tray.")
+        if "--buka-ui" in sys.argv:
+            self.jendela.tampilkan()
+        try:
+            self.jendela.jalankan()          # menghalangi sampai jendela ditutup
+        finally:
+            self._keluar(None)
+            os._exit(0)                      # pastikan proses benar-benar habis
+
+    def _buat_jendela(self):
+        """Bangun jendela UI; kembalikan None bila tkinter tidak tersedia."""
+        try:
+            # Tcl/Tk portabel perlu diberi tahu lokasi pustakanya
+            for kunci, folder in (("TCL_LIBRARY", "tcl8.6"),
+                                  ("TK_LIBRARY", "tk8.6")):
+                jalur = os.path.join(FOLDER_INI, "..", folder)
+                if os.path.isdir(jalur):
+                    os.environ.setdefault(kunci, os.path.abspath(jalur))
+            import ui_jendela
+            return ui_jendela.siapkan(self, state, catat, BERKAS_LOG,
+                                      auto_start_aktif, set_auto_start)
+        except Exception as galat:
+            catat(f"Jendela UI tidak tersedia ({galat}) -> mode tray saja.")
+            return None
+
+    def _buka_jendela(self, icon, item):
+        if self.jendela is not None:
+            self.jendela.perintah("buka")     # aman dari thread tray
+        else:
+            catat("Jendela UI tidak tersedia.")
 
     # --- Pembaruan UI tray (periodik) ---
     def _pantau_ui(self):
@@ -433,6 +482,13 @@ class KonektorTray:
         catat(f"Pasang selesai ({jumlah} berkas) -> jalankan ulang ke "
               f"versi {versi_baru}.")
         self.bridge.hentikan()
+        # Tutup jendela UI dulu supaya pengguna melihat jendela hilang
+        # sebelum proses baru menggantikan
+        if self.jendela is not None:
+            try:
+                self.jendela.perintah("keluar")
+            except Exception:
+                pass
         # Lepas kunci instance dulu supaya proses baru boleh berjalan
         try:
             self.lock_instance.close()
@@ -456,7 +512,7 @@ class KonektorTray:
         time.sleep(1)
         os._exit(0)
 
-    def _keluar(self, icon, item):
+    def _keluar(self, icon, item=None):
         catat("Keluar dari menu tray.")
         self.bridge.hentikan()
         try:
@@ -464,7 +520,14 @@ class KonektorTray:
             os.remove(BERKAS_KUNCI)
         except Exception:
             pass
-        icon.stop()
+        if icon is not None:
+            icon.stop()
+        else:
+            try:
+                if self.tray is not None:
+                    self.tray.stop()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
