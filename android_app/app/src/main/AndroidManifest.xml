@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Manifest aplikasi HaloDeck - Android Native -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Izin internet: untuk koneksi TCP ke ESP8266 (jalur Wi-Fi cadangan) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Izin status jaringan: DIPERLUKAN untuk registerNetworkCallback
+         (pantau koneksi otomatis). Tanpa ini aplikasi gagal start. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Izin lokasi: DIPERLUKAN Android 8+ untuk memindai jaringan Wi-Fi -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <application
+        android:name=".Aplikasi"
+        android:allowBackup="true"
+        android:icon="@drawable/ic_logo"
+        android:label="@string/nama_aplikasi"
+        android:theme="@style/Theme.HaloDeck"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tema aplikasi (murni Android, tanpa library eksternal) -->
+<resources>
+    <style name="Theme.HaloDeck" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">@color/aksen_biru</item>
+        <item name="android:colorAccent">@color/aksen_hijau</item>
+        <item name="android:windowBackground">@color/latar_gelap</item>
+        <item name="android:statusBarColor">@color/latar_gelap</item>
+        <item name="android:textColorPrimary">@color/teks_utama</item>
+    </style>
+</resources>

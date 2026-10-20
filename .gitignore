@@ -1,0 +1,16 @@
+# Jejak runtime Python
+__pycache__/
+*.py[cod]
+
+# Berkas lokal konektor
+pc_bridge/konektor.log
+pc_bridge/konektor.lock
+pc_bridge/_cadangan/
+
+# Hasil build paket rilis
+dist/
+
+# Gradle / Android (folder build & hasil APK)
+android_app/.gradle/
+android_app/build/
+android_app/app/build/

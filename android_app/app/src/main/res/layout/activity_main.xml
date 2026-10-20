@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Layout utama: koneksi OTOMATIS + grid tombol makro dinamis -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Judul aplikasi -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/judul"
+        android:textColor="@color/teks_utama"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Kartu status koneksi -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@color/latar_kartu"
+        android:padding="12dp"
+        android:layout_marginBottom="12dp">
+
+        <!-- IP (diisi otomatis oleh temuan-otomatis, bisa diedit manual) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="IP: "
+                android:textColor="@color/teks_redup"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/inputIp"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="mencari otomatis..."
+                android:textColorHint="@color/teks_redup"
+                android:textColor="@color/teks_utama"
+                android:inputType="text"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <!-- Baris tombol: Hubungkan + Atur Wi-Fi -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+            <Button
+                android:id="@+id/tombolHubungkan"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/tombol_hubungkan" />
+
+            <Button
+                android:id="@+id/tombolAturWifi"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Atur Wi-Fi ESP"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+        <!-- Status koneksi -->
+        <TextView
+            android:id="@+id/teksStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/status_awal"
+            android:textColor="@color/aksen_merah"
+            android:textSize="14sp"
+            android:layout_marginTop="8dp" />
+
+        <!-- Profil aktif dari PC (context-switching) -->
+        <TextView
+            android:id="@+id/teksProfil"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/profil_awal"
+            android:textColor="@color/aksen_biru"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <!-- Label grid makro -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Tombol makro (menyesuaikan profil aktif):"
+        android:textColor="@color/teks_redup"
+        android:textSize="13sp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Wadah tombol makro (diisi otomatis dari kode).
+         Dibungkus ScrollView agar profil dengan banyak tombol
+         tetap bisa diakses semua (mis. Browser: 15 tombol). -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <GridLayout
+            android:id="@+id/gridMakro"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:columnCount="2" />
+    </ScrollView>
+
+</LinearLayout>

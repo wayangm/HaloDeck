@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- String aplikasi (Bahasa Indonesia) -->
+<resources>
+    <string name="nama_aplikasi">HaloDeck</string>
+    <string name="judul">HaloDeck</string>
+    <string name="label_ip">IP ESP8266:</string>
+    <string name="hint_ip">192.168.1.100</string>
+    <string name="label_port">Port:</string>
+    <string name="hint_port">8080</string>
+    <string name="tombol_hubungkan">Hubungkan</string>
+    <string name="tombol_putus">Putuskan</string>
+    <string name="status_awal">Terputus</string>
+    <string name="profil_awal">Profil: -</string>
+</resources>

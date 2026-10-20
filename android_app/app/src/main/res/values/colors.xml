@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Warna aplikasi -->
+<resources>
+    <color name="latar_gelap">#FF121212</color>
+    <color name="latar_kartu">#FF1E1E2E</color>
+    <color name="aksen_biru">#FF4FC3F7</color>
+    <color name="aksen_hijau">#FF66BB6A</color>
+    <color name="aksen_merah">#FFEF5350</color>
+    <color name="teks_utama">#FFFFFFFF</color>
+    <color name="teks_redup">#FF9E9E9E</color>
+</resources>
