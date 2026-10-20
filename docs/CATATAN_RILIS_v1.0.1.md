@@ -17,6 +17,13 @@ Firmware ESP & APK **tidak berubah** — tetap pakai berkas dari rilis
   tanpa perlu menghafal alamat repo
 - Tautan mengikuti `repo` di `update_config.json`, jadi tetap benar walau
   repo dipindah
+- Perbaikan: instalasi baru kini ikut memasang `update_config.json`, dan
+  updater punya nilai bawaan `repo: wayangm/HaloDeck` — konektor langsung
+  bisa memeriksa pembaruan sejak pertama kali menyala
+
+> **Sudah memasang v1.0.0?** Jalankan `HaloDeck-Win-Setup-1.0.1.exe` sekali
+> untuk menimpa instalasi (folder & menu Start tetap sama). Sejak v1.0.1
+> pembaruan berikutnya terpasang otomatis lewat tray.
 
 ## Pembaruan otomatis
 

@@ -104,7 +104,13 @@ def siapkan_runtime(zip_python):
         jumlah += 1
     if jumlah < 5:
         raise SystemExit("GAGAL: berkas pc_bridge tidak lengkap.")
-    catat(f"{jumlah} berkas .py HaloDeck disalin ke runtime.")
+    # Konfigurasi pembaruan ikut dibawa agar instalasi baru langsung bisa
+    # memeriksa rilis (updater TIDAK pernah menimpa berkas ini saat update)
+    cfg = os.path.join(FOLDER_PC, "update_config.json")
+    if os.path.isfile(cfg):
+        shutil.copy2(cfg, os.path.join(tujuan_app, "update_config.json"))
+        jumlah += 1
+    catat(f"{jumlah} berkas HaloDeck disalin ke runtime.")
     return jumlah
 
 

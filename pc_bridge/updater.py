@@ -45,7 +45,7 @@ BERKAS_TERLARANG = {"update_config.json", "konektor.log", "konektor.lock"}
 
 # Konfigurasi bawaan (dibaca dari update_config.json bila ada)
 CONFIG_BAWAAN = {
-    "repo": "",                     # contoh: "namapengguna/HaloDeck"
+    "repo": "wayangm/HaloDeck",      # repo rilis resmi HaloDeck
     "prefiks_aset": "halodeck-win",  # aset rilis yg dipakai, mis. "HaloDeck-Win-1.1.0.zip"
     "cek_otomatis": True,           # cek rilis tiap 24 jam
     "pasang_otomatis": False,       # True = langsung pasang tanpa konfirmasi
