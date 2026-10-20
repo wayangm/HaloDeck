@@ -16,6 +16,7 @@ import subprocess
 import sys
 import threading
 import time
+import webbrowser
 from datetime import datetime
 
 # --- Pastikan folder pc_bridge ada di path impor ---
@@ -323,6 +324,8 @@ class KonektorTray:
                              self._toggle_autostart,
                              checked=lambda item: auto_start_aktif()),
             pystray.MenuItem("Buka Berkas Log", self._buka_log),
+            pystray.MenuItem("Unduh Berkas Lain (Firmware & APK)",
+                             self._buka_rilis),
             pystray.MenuItem(None, None, enabled=False),
             pystray.MenuItem(self._teks_versi, None, enabled=False),
             pystray.MenuItem("Periksa Pembaruan", self._cek_update,
@@ -381,6 +384,17 @@ class KonektorTray:
             os.startfile(BERKAS_LOG)
         except Exception as galat:
             catat(f"Gagal buka log: {galat}")
+
+    def _buka_rilis(self, icon, item):
+        """Buka halaman rilis di peramban (unduh firmware ESP & APK)."""
+        try:
+            repo = str(updater.muat_config().get("repo") or "").strip().strip("/")
+            url = (f"https://github.com/{repo}/releases" if repo else
+                   "https://github.com/wayangm/HaloDeck/releases")
+            webbrowser.open(url)
+            catat(f"Membuka halaman rilis: {url}")
+        except Exception as galat:
+            catat(f"Gagal buka halaman rilis: {galat}")
 
     # --- Pembaruan aplikasi (GitHub Releases, lihat updater.py) ---
     def _teks_versi(self, item):
