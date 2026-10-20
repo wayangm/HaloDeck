@@ -7,7 +7,8 @@ pc_bridge/konektor.log
 pc_bridge/konektor.lock
 pc_bridge/_cadangan/
 
-# Hasil build paket rilis
+# Hasil build
+build/
 dist/
 
 # Gradle / Android (folder build & hasil APK)
