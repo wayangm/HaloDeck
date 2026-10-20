@@ -35,6 +35,16 @@ from versi import VERSI  # noqa: E402
 PYTHON_EMBED = ("https://www.python.org/ftp/python/3.10.11/"
                 "python-3.10.11-embed-amd64.zip")
 PERINTAH_PIP = ["pyserial", "pystray", "pillow"]
+# Berkas & folder Tcl/Tk (untuk jendela UI tkinter) yang disalin dari
+# instalasi Python Lengkap yang SUDAH ada di mesin.
+BERKAS_TK = ["tcl86t.dll", "tk86t.dll"]
+PYD_TK = "_tkinter.pyd"
+FOLDER_TK_DATA = "tcl"          # berisi tcl8.6, tk8.6, dde1.4, reg1.3
+# Kandidat instalasi Python Lengkap. Hanya DICARI — tidak pernah dipasang.
+KANDIDAT_PYTHON_LENGKAP = [
+    r"C:\Python310",
+    r"C:\Program Files\Python310",
+]
 
 ISCC_KANDIDAT = [
     r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
@@ -67,6 +77,121 @@ def unduh_python_embed():
     return tujuan
 
 
+def siapkan_tcltk():
+    """Tentukan SUMBER Tcl/Tk 8.6 untuk runtime portabel.
+
+    Python portable TIDAK menyertakan tkinter, maka berkasnya diambil
+    dari instalasi Python Lengkap yang sudah terpasang di mesin.
+
+    PENTING (janji keamanan): fungsi ini HANYA mencari lokasi berkas.
+    Tidak ada unduhan installer, tidak ada `msiexec`, tidak ada pemasangan
+    senyap apa pun. Rilis awal memasang Python diam-diam demi Tcl/Tk dan
+    itu merusak instalasi Python pengguna — cara itu dihapus permanen.
+    """
+    return cari_python_lengkap()
+
+
+def cari_python_lengkap():
+    """Cari instalasi Python Lengkap (bertcltk) yang sudah ada di mesin."""
+    kandidat = []
+    for akar in (sys.base_prefix, sys.prefix, *KANDIDAT_PYTHON_LENGKAP):
+        if not akar or not os.path.isdir(akar):
+            continue
+        if os.path.normcase(akar) not in {os.path.normcase(k) for k in kandidat}:
+            kandidat.append(akar)
+
+    for akar in kandidat:
+        if _lengkap_bertcltk(akar):
+            return akar
+
+    raise SystemExit(
+        "GAGAL: Tcl/Tk 8.6 tidak ditemukan.\n"
+        "Build membutuhkan instalasi Python Lengkap (dari python.org, "
+        "komponen tcltk ikut terpasang) yang SUDAH ada di mesin, misalnya "
+        "C:\\Python310 — atau jalankan build dengan Python lengkap.\n"
+        "Skrip ini TIDAK akan memasang atau mengunduh pemasang apa pun."
+    )
+
+
+def _lengkap_bertcltk(akar):
+    """True bila `akar` berisi Python Lengkap lengkap dengan Tcl/Tk."""
+    data_tk = os.path.join(akar, FOLDER_TK_DATA)
+    if not (os.path.isdir(os.path.join(data_tk, "tcl8.6")) and
+            os.path.isdir(os.path.join(data_tk, "tk8.6"))):
+        return False
+    if not os.path.isfile(os.path.join(akar, "DLLs", PYD_TK)):
+        return False
+    return all(_cari_berkas(akar, nama) for nama in BERKAS_TK)
+
+
+def _cari_berkas(akar, nama):
+    """Cari berkas di folder akar atau di subfolder DLLs (layout tiap versi)."""
+    for p in (os.path.join(akar, "DLLs", nama), os.path.join(akar, nama)):
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def salin_tcltk(sumber):
+    """Salin Tcl/Tk dari instalasi Python lengkap ke runtime portabel.
+
+    Sumber boleh berupa layout akar (tcl86t.dll di root) atau layout
+    DLLs\\ (Python 3.10.11) — keduanya dicari otomatis oleh _cari_berkas().
+    """
+    for nama in BERKAS_TK:
+        asal = _cari_berkas(sumber, nama)
+        if not asal:
+            raise SystemExit(f"GAGAL: {nama} tidak ditemukan di {sumber}.")
+        shutil.copy2(asal, os.path.join(FOLDER_RUNTIME, nama))
+
+    asal_pyd = _cari_berkas(sumber, PYD_TK)
+    if not asal_pyd:
+        raise SystemExit(f"GAGAL: {PYD_TK} tidak ditemukan di {sumber}.")
+    shutil.copy2(asal_pyd, os.path.join(FOLDER_RUNTIME, PYD_TK))
+
+    sumber_data = os.path.join(sumber, FOLDER_TK_DATA)
+    for nama in os.listdir(sumber_data):
+        asal = os.path.join(sumber_data, nama)
+        tujuan = os.path.join(FOLDER_RUNTIME, nama)
+        if os.path.isdir(asal):
+            shutil.copytree(asal, tujuan, dirs_exist_ok=True)
+        else:
+            shutil.copy2(asal, tujuan)
+
+    # Paket Python-nya (Lib\tkinter) — Python portable TIDAK menyertakannya,
+    # padahal tanpa ini `import tkinter` tetap gagal walau DLL sudah ada.
+    sumber_pkg = os.path.join(sumber, "Lib", "tkinter")
+    if not os.path.isdir(sumber_pkg):
+        raise SystemExit(f"GAGAL: Lib\\tkinter tidak ditemukan di {sumber}.")
+    shutil.copytree(sumber_pkg, os.path.join(FOLDER_RUNTIME, "Lib", "tkinter"),
+                    dirs_exist_ok=True)
+    catat("Tcl/Tk 8.6 + paket Lib\\tkinter disalin -> jendela UI siap dipakai.")
+
+
+def uji_tkinter():
+    """Uji bahwa tkinter benar-benar bisa membangun jendela di runtime.
+
+    Tcl di Windows tidak menelusuri folder python.exe, maka lokasi data
+    tcl8.6/tk8.6 diberitahukan lewat env TCL_LIBRARY/TK_LIBRARY — sama
+    persis dengan yang dilakukan connector_app._buat_jendela() saat aplikasi
+    berjalan pada akhirnya.
+    """
+    env = dict(os.environ)
+    for kunci, folder in (("TCL_LIBRARY", "tcl8.6"), ("TK_LIBRARY", "tk8.6")):
+        jalur = os.path.join(FOLDER_RUNTIME, folder)
+        if os.path.isdir(jalur):
+            env[kunci] = jalur
+    keluar = subprocess.run(
+        [os.path.join(FOLDER_RUNTIME, "python.exe"), "-c",
+         "import tkinter; r = tkinter.Tk(); r.withdraw(); "
+         "print('TK', tkinter.TkVersion); r.destroy()"],
+        capture_output=True, text=True, env=env)
+    if keluar.returncode != 0 or "TK" not in (keluar.stdout or ""):
+        raise SystemExit("GAGAL: tkinter tidak berfungsi di runtime portabel.\n"
+                         + (keluar.stderr or ""))
+    catat(f"Uji tkinter lulus ({keluar.stdout.strip()}).")
+
+
 def siapkan_runtime(zip_python):
     if os.path.isdir(FOLDER_RUNTIME):
         shutil.rmtree(FOLDER_RUNTIME, ignore_errors=True)
@@ -76,8 +201,10 @@ def siapkan_runtime(zip_python):
         z.extractall(FOLDER_RUNTIME)
 
     # Aktifkan site-packages pada file ._pth (embeddable mematikan site by default)
+    # "Lib" ditambahkan agar paket Lib\tkinter (jendela UI) bisa diimpor.
     pth = os.path.join(FOLDER_RUNTIME, "python310._pth")
-    baris = ["python310.zip", ".", "Lib\\site-packages", "app", "import site", ""]
+    baris = ["python310.zip", ".", "Lib", "Lib\\site-packages", "app",
+             "import site", ""]
     with open(pth, "w", encoding="utf-8") as f:
         f.write("\n".join(baris))
 
@@ -90,6 +217,9 @@ def siapkan_runtime(zip_python):
          "--quiet", "--no-warn-script-location"] + PERINTAH_PIP,
         check=True,
     )
+
+    # Tcl/Tk supaya jendela UI (tkinter) bisa jalan di Python portabel
+    salin_tcltk(siapkan_tcltk())
 
     # Salin kode HaloDeck (.py asli — TIDAK dikompilasi)
     tujuan_app = os.path.join(FOLDER_RUNTIME, "app")
@@ -195,6 +325,7 @@ def utama():
 
     zip_python = unduh_python_embed()
     siapkan_runtime(zip_python)
+    uji_tkinter()                      # pastikan jendela UI bisa dibangun
 
     iss = tulis_skrip_iss()
     os.makedirs(FOLDER_KELUARAN, exist_ok=True)
