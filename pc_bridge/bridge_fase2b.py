@@ -13,7 +13,8 @@ import time
 # Izinkan impor modul aksi dari folder yang sama
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from bridge_fase2a import DetektorJendela, ManajerSerial, PEMETA_PROFIL, PROFIL_DEFAULT
+from bridge_fase2a import (DetektorJendela, ManajerOtomatis, PEMETA_PROFIL,
+                           PROFIL_DEFAULT)
 from aksi import eksekusi_perintah
 
 # ---------- KONFIGURASI ----------
@@ -21,17 +22,21 @@ PORT_TARGET   = "COM4"
 BAUD_RATE     = 115200
 INTERVAL_POLL = 0.5
 INTERVAL_PING = 5.0
+# IP ESP statis; kosongkan "" untuk dicari otomatis lewat UDP discovery
+HOST_TARGET   = ""
 
 
 def jalankan_bridge_penuh():
     print("=" * 55)
     print(" PYTHON BRIDGE - FASE 2b (TERINTEGRASI)")
     print(" 1. Deteksi active window -> kirim PROF")
-    print(" 2. Terima BTN:<AKSI> dari serial -> eksekusi aksi PC")
+    print(" 2. Terima BTN:<AKSI> dari jalur USB/Wi-Fi -> eksekusi aksi PC")
     print("=" * 55)
 
     detektor = DetektorJendela()
-    serial_mgr = ManajerSerial(PORT_TARGET, BAUD_RATE)
+    # ManajerOtomatis: USB dulu, lalu jatuh ke Wi-Fi (TCP 8082) bila
+    # kabel tidak terpasang — PC tetap bisa dipakai tanpa USB.
+    serial_mgr = ManajerOtomatis(PORT_TARGET, BAUD_RATE, host_target=HOST_TARGET)
     serial_mgr.coba_sambung()
 
     profil_sekarang = None
@@ -79,8 +84,7 @@ def jalankan_bridge_penuh():
 
     except KeyboardInterrupt:
         print("\n[BRIIDGE] Dihentikan oleh pengguna.")
-        if serial_mgr.koneksi:
-            serial_mgr.koneksi.close()
+        serial_mgr.putus()
 
 
 if __name__ == "__main__":

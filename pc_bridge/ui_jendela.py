@@ -230,11 +230,13 @@ class JendelaKonektor:
         self.kanvas_dot.itemconfigure(self.dot,
                                       fill="#2ecc71" if hijau else "#e74c3c")
         self.lbl_status.configure(
-            text="TERSAMBUNG ke ESP8266" if hijau else "Mencari ESP8266...")
+            text=f"TERSAMBUNG — {s.get('jalur', '-')}" if hijau
+                 else "Mencari ESP8266...")
         self.lbl_profil.configure(text=f"Profil: {s.get('profil', '-')}")
         self.lbl_aksi.configure(text=f"Aksi: {s.get('jumlah_aksi', 0)}")
+        jalur = s.get("jalur", "-")
         self.lbl_port.configure(
-            text=f"Port {self.app.port_target} @ {self.app.baud_rate}  ·  "
+            text=f"Jalur {jalur}  ·  "
                  f"Log: {os.path.basename(self.berkas_log)}")
 
         u = self.app.updater.status

@@ -2,11 +2,13 @@
 // HALODECK - FASE 2 (Firmware Final)
 // Board: Wemos D1 Mini (ESP8266)
 // Tugas :
-//  - USB Serial PRIORITAS + Wi-Fi Station TCP :8080 CADANGAN
+//  - USB Serial PRIORITAS + Wi-Fi Station TCP :8080 CADANGAN (HP)
+//  - Wi-Fi Station TCP :8082 khusus PC BRIDGE -> PC bisa bekerja
+//    tanpa kabel USB (temukan IP via UDP :8081, lalu sambung :8082)
 //  - Kredensial Wi-Fi DISIMPAN di LittleFS (tanpa edit kode!)
 //  - Fallback hotspot "HALODECK-SETUP" bila belum ada kredensial
 //    atau jaringan gagal -> HP kirim SSID+password via aplikasi
-//  - UDP Discovery :8081 -> aplikasi Android menemukan IP otomatis
+//  - UDP Discovery :8081 -> aplikasi Android & PC menemukan IP otomatis
 // Komentar dalam Bahasa Indonesia
 // ============================================================
 
@@ -18,18 +20,22 @@
 
 // ---------- KONFIGURASI ----------
 const int   PORT_TCP   = 8080;   // Port TCP (perintah dari HP)
+const int   PORT_TCP_PC = 8082;  // Port TCP khusus PC bridge (tanpa USB)
 const int   PORT_UDP   = 8081;   // Port UDP (discovery otomatis)
 const long  BAUD_RATE  = 115200;
 const char* NAMA_AP    = "HALODECK-SETUP";   // Hotspot fallback
 
 // ---------- VARIABEL GLOBAL ----------
 WiFiServer server(PORT_TCP);
+WiFiServer serverPc(PORT_TCP_PC);   // Jalur khusus PC bridge (terpisah dari HP)
 WiFiUDP udp;
 ESP8266WebServer webServer(80);   // Portal setup di http://192.168.4.1
 DNSServer dnsServer;              // Captive portal: semua domain -> portal
-WiFiClient clientAktif;
+WiFiClient clientAktif;           // Client HP (port 8080)
+WiFiClient clientPc;              // Client PC bridge (port 8082)
 String bufferSerial = "";
 String bufferTcp    = "";
+String bufferTcpPc  = "";
 bool   modeAP       = false;     // true = hotspot setup, false = station
 bool   mintaRestart = false;     // Flag restart aman dari handler web
 String ssidTersimpan = "";
@@ -45,6 +51,7 @@ void kedipLed() {
 
 // Deklarasi maju (didefinisikan di bawah)
 void kirimKeHP(String pesan);
+void kirimKePC(String pesan);
 
 // ============================================================
 // PENYIMPANAN KREDENSIAL (LittleFS) - TIDAK PERLU EDIT KODE
@@ -267,6 +274,18 @@ void kirimKeHP(String pesan) {
   }
 }
 
+// ---------- KIRIM KE PC BRIDGE (TCP 8082) ----------
+// Dipakai saat PC tersambung lewat Wi-Fi (kabel USB dicabut).
+// Jalur serial TETAP dikirim juga agar monitor Arduino IDE tetap bisa
+// memantau, dan agar PC yang tersambung via USB tidak kehilangan data.
+void kirimKePC(String pesan) {
+  if (clientPc && clientPc.connected()) {
+    clientPc.println(pesan);
+    kedipLed();
+  }
+  Serial.println(pesan);
+}
+
 // ============================================================
 // PEMROSES DATA DARI HP (TCP)
 // ============================================================
@@ -293,7 +312,7 @@ void prosesDataTcp(String data) {
 
   if (tipe == "BTN") {
     arg.toUpperCase();
-    Serial.println("BTN:" + arg);       // Teruskan ke PC (jalur prioritas)
+    kirimKePC("BTN:" + arg);            // Teruskan ke PC (TCP 8082 + serial)
     kirimKeHP("ACK:BTN:" + arg);
     kedipLed();
 
@@ -313,6 +332,60 @@ void prosesDataTcp(String data) {
 
   } else {
     kirimKeHP("ERR:PERINTAH_TIDAK_DIKENAL");
+  }
+}
+
+// ============================================================
+// PEMROSES DATA DARI PC BRIDGE (TCP 8082 — jalur tanpa USB)
+// Protokol identik dengan jalur serial. Balasan dikirim HANYA ke
+// clientPc (bukan Serial) supaya tidak menduplikasi kiriman
+// kirimKePC() yang memang sudah mengirim ke dua tempat.
+// ============================================================
+void prosesDataTcpPc(String data) {
+  data.trim();
+  if (data.length() == 0) return;
+
+  int posTitikDua = data.indexOf(':');
+  if (posTitikDua == -1) {
+    if (data == "PING") {
+      clientPc.println("PONG");
+    } else if (data == "STAT") {
+      clientPc.println("OK:SIAP:FASE2");
+    } else {
+      clientPc.println("ERR:FORMAT");
+    }
+    return;
+  }
+
+  String tipe = data.substring(0, posTitikDua);
+  String arg  = data.substring(posTitikDua + 1);
+  tipe.toUpperCase();
+
+  if (tipe == "PROF") {
+    arg.toUpperCase();
+    kirimKeHP("PROF:" + arg);           // Context-switching ke HP
+    clientPc.println("ACK:PROF:" + arg);
+    kedipLed();
+
+  } else if (tipe == "ACK" || tipe == "ERR") {
+    // Balasan konfirmasi -> jangan dibalas (hindari loop saling membalas)
+    return;
+
+  } else if (tipe == "PING") {
+    clientPc.println("PONG");
+
+  } else if (tipe == "STAT") {
+    clientPc.println("OK:SIAP:FASE2");
+
+  } else if (tipe == "BTN") {
+    arg.toUpperCase();
+    clientPc.println("ACK:BTN:" + arg);
+
+  } else if (tipe == "WIFI") {
+    prosesPerintahWifi(arg);            // Setup Wi-Fi juga bisa via TCP PC
+
+  } else {
+    clientPc.println("ERR:PERINTAH_TIDAK_DIKENAL");
   }
 }
 
@@ -428,7 +501,14 @@ void setup() {
   }
 
   server.begin();
+  serverPc.begin();                   // Jalur khusus PC bridge (TCP 8082)
   udp.begin(PORT_UDP);                  // Siap terima paket discovery
+
+  // Catat sisa heap: ESP8266 punya ~40 KB, dan kini memuat DUA
+  // WiFiServer + DUA WiFiClient. Angka ini dipantau saat pengujian
+  // untuk memastikan tidak ada kebocoran memori antar siklus loop.
+  Serial.print("OK:HEAP:");
+  Serial.println(ESP.getFreeHeap());
 
   Serial.println("OK:SIAP");
   for (int i = 0; i < 3; i++) kedipLed();
@@ -496,6 +576,42 @@ void loop() {
         }
       }
     }
+  }
+
+  // --- 2b. Jalur PC BRIDGE: TCP 8082 (dipakai saat kabel USB dicabut) ---
+  // Port TERPISAH dari HP supaya keduanya tidak saling mengusir client.
+  WiFiClient baruPc = serverPc.available();
+  if (baruPc) {
+    if (clientPc) {
+      clientPc.stop();            // Tutup client lama (stale)
+    }
+    clientPc = baruPc;
+    clientPc.setNoDelay(true);
+    clientPc.println(modeAP ? "OK:TERHUBUNG:AP" : "OK:TERHUBUNG:STA");
+    Serial.println("OK:PC_BRIDGE:TERHUBUNG");
+  }
+
+  if (clientPc && clientPc.connected()) {
+    while (clientPc.available()) {
+      char c = clientPc.read();
+      if (c == '\n' || c == '\r') {
+        if (bufferTcpPc.length() > 0) {
+          prosesDataTcpPc(bufferTcpPc);
+          bufferTcpPc = "";
+        }
+      } else {
+        bufferTcpPc += c;
+        if (bufferTcpPc.length() > 96) {
+          clientPc.println("ERR:PANJANG_BUFFER");
+          bufferTcpPc = "";
+        }
+      }
+    }
+  } else if (clientPc) {
+    // Client PC hilang (putus/timeout) -> bersihkan agar siap menerima
+    // koneksi berikutnya tanpa harus menunggu koneksi baru masuk.
+    clientPc.stop();
+    bufferTcpPc = "";
   }
 
   // --- 3. UDP Discovery: HP broadcast "DISCOVER" -> ESP balas IP ---

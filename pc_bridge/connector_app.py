@@ -23,7 +23,9 @@ from datetime import datetime
 FOLDER_INI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, FOLDER_INI)
 
-from bridge_fase2a import DetektorJendela, ManajerSerial, PEMETA_PROFIL, PROFIL_DEFAULT
+from bridge_fase2a import (DetektorJendela, ManajerOtomatis, ManajerTcp,
+                           PEMETA_PROFIL, PROFIL_DEFAULT, PORT_TCP_PC)
+import bridge_fase2a
 from aksi import eksekusi_perintah
 from versi import VERSI
 import updater
@@ -34,6 +36,10 @@ from PIL import Image, ImageDraw
 # ---------- KONFIGURASI ----------
 PORT_TARGET   = "COM4"
 BAUD_RATE     = 115200
+# IP ESP statis; kosongkan "" agar dicari otomatis lewat UDP discovery.
+# Discovery menemukan ESP yang menjawab "MACROPAD:STA:<IP>" (firmware lama)
+# maupun "HALODECK:STA:<IP>" (firmware baru).
+HOST_TARGET   = ""
 INTERVAL_POLL = 0.5
 INTERVAL_PING = 5.0
 BERKAS_LOG    = os.path.join(FOLDER_INI, "konektor.log")
@@ -48,6 +54,7 @@ state = {
     "profil": "-",
     "pesan": "Memulai...",
     "jumlah_aksi": 0,
+    "jalur": "-",               # "USB COM4" / "Wi-Fi 192.168.0.117:8082"
 }
 
 
@@ -68,6 +75,10 @@ def catat(pesan):
             print(baris, end="", flush=True)
     except Exception:
         pass
+
+
+# Arahkan catatan jalur koneksi dari bridge_fase2a ke log konektor
+bridge_fase2a.PENCATAT = catat
 
 
 # ============================================================
@@ -207,7 +218,10 @@ def buat_ikon(hijau=True):
 class KonektorBridge:
     def __init__(self):
         self.detektor = DetektorJendela()
-        self.serial_mgr = ManajerSerial(PORT_TARGET, BAUD_RATE)
+        # ManajerOtomatis memilih jalur sendiri: USB dulu, lalu Wi-Fi (TCP 8082)
+        self.serial_mgr = ManajerOtomatis(PORT_TARGET, BAUD_RATE,
+                                           host_target=HOST_TARGET,
+                                           port_pc=PORT_TCP_PC)
         self.berhenti = threading.Event()
         self.thread = None
         self.profil_terakhir = None
@@ -224,8 +238,7 @@ class KonektorBridge:
     def hentikan(self):
         self.berhenti.set()
         try:
-            if self.serial_mgr.koneksi:
-                self.serial_mgr.koneksi.close()
+            self.serial_mgr.putus()
         except Exception:
             pass
         state["tersambung"] = False
@@ -243,7 +256,9 @@ class KonektorBridge:
                 status_baru = self.serial_mgr.status_tersambung
                 if status_baru != state["tersambung"]:
                     state["tersambung"] = status_baru
-                    catat("ESP8266 TERSAMBUNG." if status_baru
+                    jalur = self.serial_mgr.jalur_terpakai
+                    state["jalur"] = jalur if status_baru else "-"
+                    catat(f"ESP8266 TERSAMBUNG via {jalur}." if status_baru
                           else "ESP8266 TERPUTUS — mencoba ulang...")
 
                 # --- Baca semua balasan/perintah masuk ---
@@ -407,8 +422,10 @@ class KonektorTray:
 
     # --- Teks menu dinamis ---
     def _teks_status(self, item):
-        return ("Status: Tersambung ESP8266" if state["tersambung"]
-                else "Status: Mencari ESP8266...")
+        if not state["tersambung"]:
+            return "Status: Mencari ESP8266..."
+        jalur = state.get("jalur") or "-"
+        return f"Status: Tersambung ({jalur})"
 
     def _teks_profil(self, item):
         return f"Profil aktif di PC: {state['profil']}"
