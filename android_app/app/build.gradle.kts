@@ -12,8 +12,8 @@ android {
         applicationId = "com.halodeck.macropad"
         minSdk = 24          // Android 7.0 ke atas
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.0.2"
     }
 
     buildTypes {

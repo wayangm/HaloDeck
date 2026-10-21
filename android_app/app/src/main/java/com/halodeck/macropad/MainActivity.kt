@@ -6,8 +6,9 @@
 //     auto-connect TCP tanpa ketik IP apa pun
 //  2. AUTO-RECONNECT: koneksi putus / jaringan siap lagi ->
 //     aplikasi langsung mencari & menyambung sendiri
-//  3. ATUR WI-FI VIA HP: kirim SSID+password ke ESP tanpa kabel
-//     (ESP simpan di flash, restart, langsung join jaringan)
+//  3. SETUP WI-FI: lewat portal browser ESP (hotspot HALODECK-SETUP ->
+//     http://192.168.4.1). Tombol "Atur Wi-Fi" di aplikasi DIHAPUS karena
+//     ESP tidak memancarkan hotspot lagi setelah terkonfigurasi
 //  4. Grid tombol MENYESUAIKAN PROFIL aktif di PC (context-switching)
 // Komentar dalam Bahasa Indonesia
 // ============================================================
@@ -15,28 +16,19 @@
 package com.halodeck.macropad
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
-import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import android.net.wifi.WifiNetworkSpecifier
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
-import android.text.InputType
 import android.util.Log
 import android.view.Gravity
 import android.widget.Button
 import android.widget.EditText
 import android.widget.GridLayout
-import android.widget.LinearLayout
-import android.widget.ListView
-import android.widget.ArrayAdapter
 import android.widget.TextView
 import android.widget.Toast
 import java.io.BufferedReader
@@ -125,19 +117,12 @@ val PROFIL_MAKRO: Map<String, List<Makro>> = mapOf(
     )
 )
 
-// Nama hotspot fallback ESP (mode setup)
-const val NAMA_HOTSPOT_ESP = "HALODECK-SETUP"
-const val IP_MODE_AP       = "192.168.4.1"
-
-// Kode permintaan izin lokasi (dipakai untuk pindai Wi-Fi)
-const val IZIN_LOKASI = 101
 
 class MainActivity : Activity() {
 
     // --- Elemen UI ---
     private lateinit var inputIp: EditText
     private lateinit var tombolHubungkan: Button
-    private lateinit var tombolAturWifi: Button
     private lateinit var teksStatus: TextView
     private lateinit var teksProfil: TextView
     private lateinit var gridMakro: GridLayout
@@ -162,7 +147,6 @@ class MainActivity : Activity() {
 
         inputIp = findViewById(R.id.inputIp)
         tombolHubungkan = findViewById(R.id.tombolHubungkan)
-        tombolAturWifi = findViewById(R.id.tombolAturWifi)
         teksStatus = findViewById(R.id.teksStatus)
         teksProfil = findViewById(R.id.teksProfil)
         gridMakro = findViewById(R.id.gridMakro)
@@ -182,9 +166,6 @@ class MainActivity : Activity() {
                 mulaiPencarian()
             }
         }
-
-        // --- Tombol atur Wi-Fi ESP via HP ---
-        tombolAturWifi.setOnClickListener { tampilkanDialogAturWifi() }
 
         // --- Pantau jaringan: Wi-Fi siap -> langsung cari & sambung ---
         pantauJaringan()
@@ -287,9 +268,14 @@ class MainActivity : Activity() {
                                 // karena IP asli ESP pasti benar.
                                 jawaban = paket.address.hostAddress
                             } else if (bagian.size == 3 && bagian[1] == "AP") {
+                                // ESP mode setup (belum ada kredensial):
+                                // hotspot menyala, konfigurasi via PORTAL BROWSER
+                                // (tombol atur Wi-Fi di aplikasi sudah dihapus —
+                                //  ESP tidak memancarkan hotspot setelah terkonfigurasi)
                                 uiHandler.post {
                                     teksStatus.text =
-                                        "ESP mode hotspot — tekan 'Atur Wi-Fi ESP'"
+                                        "ESP mode setup — sambung hotspot HALODECK-SETUP, " +
+                                        "lalu buka http://192.168.4.1"
                                     teksStatus.setTextColor(getColor(R.color.aksen_biru))
                                 }
                             }
@@ -452,223 +438,5 @@ class MainActivity : Activity() {
                 uiHandler.post { /* Koneksi mati, pembaca yang menangani */ }
             }
         }.start()
-    }
-
-    // ============================================================
-    // ATUR WI-FI ESP8266 LEWAT HP (tanpa kabel, tanpa PC)
-    // SSID diisi lewat HASIL PINDAI, bukan ketik manual
-    // ============================================================
-    private fun tampilkanDialogAturWifi() {
-        val etSsid = EditText(this).apply {
-            hint = "SSID (pindai dulu atau ketik manual)"
-            inputType = InputType.TYPE_CLASS_TEXT
-        }
-        val etPass = EditText(this).apply {
-            hint = "Password Wi-Fi"
-            inputType = InputType.TYPE_CLASS_TEXT or
-                    InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        val daftarHasil = ListView(this).apply {
-            visibility = android.view.View.GONE
-            minimumHeight = 120
-        }
-        val teksPindai = TextView(this).apply {
-            text = "Memindai jaringan di sekitar..."
-            setTextColor(getColor(R.color.aksen_biru))
-        }
-
-        val isi = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            lp.marginStart = 48; lp.marginEnd = 48; lp.topMargin = 16
-            layoutParams = lp
-            addView(etSsid)
-            addView(teksPindai)
-            addView(daftarHasil)
-            addView(etPass)
-        }
-
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("Atur Wi-Fi ESP8266")
-            .setMessage(
-                "Pilih jaringan Wi-Fi rumah dari hasil pindai. " +
-                "ESP8266 menyimpannya lalu otomatis menyambung.\n\n" +
-                "HP sejenak pindah ke hotspot '$NAMA_HOTSPOT_ESP' — " +
-                "internet HP tetap jalan via data seluler."
-            )
-            .setView(isi)
-            .setPositiveButton("Kirim & Sambungkan") { _, _ ->
-                val ssid = etSsid.text.toString().trim()
-                val sandi = etPass.text.toString()
-                if (ssid.isEmpty()) {
-                    Toast.makeText(this, "SSID belum dipilih!", Toast.LENGTH_SHORT).show()
-                } else {
-                    kirimKredensialWifi(ssid, sandi)
-                }
-            }
-            .setNegativeButton("Batal", null)
-            .create()
-
-        dialog.setOnShowListener {
-            pindaiJaringan(etSsid, daftarHasil, teksPindai)
-        }
-        dialog.show()
-    }
-
-    // Pindai jaringan Wi-Fi di sekitar via WifiManager (butuh izin lokasi)
-    private fun pindaiJaringan(
-        etSsid: EditText,
-        daftarHasil: ListView,
-        teksPindai: TextView
-    ) {
-        // Cek izin lokasi (wajib Android 8+ untuk hasil scan Wi-Fi)
-        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
-            != android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) {
-            teksPindai.text = "Butuh izin lokasi untuk memindai — izinkan dulu ya"
-            requestPermissions(
-                arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION),
-                IZIN_LOKASI
-            )
-            return
-        }
-
-        val wifiManager = applicationContext
-            .getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
-
-        @Suppress("DEPRECATION")
-        val berhasil = wifiManager.startScan()
-        teksPindai.text =
-            if (berhasil) "Memindai sekitar 5 detik..." else "Pindai dimulai, tunggu sebentar..."
-
-        // Ambil hasil pindai (sedikit delay agar scan sempat selesai)
-        daftarHasil.postDelayed({
-            @Suppress("DEPRECATION")
-            val hasil = wifiManager.scanResults
-                .mapNotNull { r -> r.SSID?.takeIf { it.isNotEmpty() } }
-                .distinct()
-                .sortedBy { it.lowercase() }
-
-            if (hasil.isEmpty()) {
-                teksPindai.text =
-                    "Tidak ada jaringan (GPS mungkin perlu aktif). Ketik manual saja:"
-                return@postDelayed
-            }
-
-            teksPindai.text = "Klik jaringan untuk memilih (${hasil.size} ditemukan):"
-            daftarHasil.visibility = android.view.View.VISIBLE
-            daftarHasil.adapter = ArrayAdapter(
-                this@MainActivity,
-                android.R.layout.simple_list_item_1,
-                hasil
-            )
-            daftarHasil.setOnItemClickListener { _, _, posisi, _ ->
-                etSsid.setText(hasil[posisi])
-                daftarHasil.visibility = android.view.View.GONE
-                teksPindai.text = "Terpilih: ${hasil[posisi]}"
-            }
-        }, 5000)
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == IZIN_LOKASI) {
-            Toast.makeText(
-                this,
-                if (grantResults.isNotEmpty() &&
-                    grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
-                ) "Izin diberikan — buka lagi dialog Atur Wi-Fi"
-                else "Tanpa izin lokasi, pindai Wi-Fi tidak bisa",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
-    private fun kirimKredensialWifi(ssid: String, sandi: String) {
-        teksStatus.text = "Menyambung ke hotspot ESP untuk setup..."
-        teksStatus.setTextColor(getColor(R.color.aksen_biru))
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10+: sambung hotspot ESP TANPA kehilangan internet
-            // (WifiNetworkSpecifier — koneksi lokal khusus, data seluler tetap jalan)
-            val specifier = WifiNetworkSpecifier.Builder()
-                .setSsid(NAMA_HOTSPOT_ESP)
-                .build()
-            val permintaan = NetworkRequest.Builder()
-                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-                .setNetworkSpecifier(specifier)
-                .build()
-
-            cm.requestNetwork(permintaan, object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) {
-                    // Terhubung hotspot ESP -> kirim kredensial
-                    Thread {
-                        try {
-                            cm.bindProcessToNetwork(network)   // Paksa lewat hotspot ESP
-                            Socket(IP_MODE_AP, 8080).use { s ->
-                                val w = OutputStreamWriter(s.getOutputStream(), "UTF-8")
-                                w.write("WIFI:$ssid:$sandi\n")
-                                w.flush()
-                                val r = BufferedReader(InputStreamReader(s.getInputStream()))
-                                val balas = r.readLine()   // ACK:WIFI:MENYIMPAN
-                                uiHandler.post {
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        "ESP: ${balas ?: "OK"} — menyimpan & restart. " +
-                                        "Tunggu ~30 detik, aplikasi mencari otomatis.",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    teksStatus.text = "Kredensial terkirim — ESP restart..."
-                                }
-                            }
-                        } catch (e: Exception) {
-                            uiHandler.post {
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    "Gagal kirim: ${e.message}",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        } finally {
-                            cm.bindProcessToNetwork(null)
-                            cm.unregisterNetworkCallback(this)
-                            // Setelah ESP restart & join router, mulai cari lagi
-                            uiHandler.postDelayed({
-                                terhubung = false
-                                mulaiPencarian()
-                            }, 15000)
-                        }
-                    }.start()
-                }
-
-                override fun onUnavailable() {
-                    uiHandler.post {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Hotspot '$NAMA_HOTSPOT_ESP' tidak ditemukan. " +
-                            "Pastikan ESP menyala (LED mati 3x = mode hotspot).",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        teksStatus.text = "Hotspot ESP tidak ditemukan"
-                    }
-                }
-            }, 20000)   // Timeout 20 detik
-        } else {
-            // Android 9 ke bawah: arahkan ke Pengaturan Wi-Fi
-            Toast.makeText(
-                this,
-                "Sambung manual ke hotspot '$NAMA_HOTSPOT_ESP' di " +
-                "Pengaturan Wi-Fi, lalu tekan tombol ini lagi.",
-                Toast.LENGTH_LONG
-            ).show()
-            startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
-        }
     }
 }

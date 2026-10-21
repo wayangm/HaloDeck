@@ -6,8 +6,9 @@ HaloDeck **v1.0.2** — konektor Windows kini punya jendela UI sungguhan.
 |---|---|
 | **`HaloDeck-Win-Setup-1.0.2.exe`** | Installer Windows (per-user, tanpa admin) |
 | `HaloDeck-Win-1.0.2.zip` | Kode `.py` murni untuk instalasi tanpa installer |
+| `HaloDeck-Android-1.0.2.apk` | Aplikasi HP (versi 1.0.2) |
 
-Firmware ESP & APK **tidak berubah** — tetap pakai berkas dari rilis
+Firmware ESP **tidak berubah** — tetap pakai berkas dari rilis
 [v1.0.0](https://github.com/wayangm/HaloDeck/releases/tag/v1.0.0).
 
 ## Yang baru: jendela UI
@@ -32,6 +33,18 @@ Menjalankan langsung dengan jendela terbuka:
 ```powershell
 pythonw app\connector_app.py --buka-ui
 ```
+
+## Aplikasi Android: tombol "Atur Wi-Fi" dihapus
+
+Pengaturan Wi-Fi dilakukan lewat **portal browser ESP**, bukan lewat aplikasi:
+
+- Setelah kredensial tersimpan, ESP berjalan mode station saja — **tidak lagi
+  memancarkan hotspot `HALODECK-SETUP`**, sehingga alur kirim SSID dari aplikasi
+  tidak akan pernah menemukan hotspot (muncul sebagai tombol tak merespons).
+- Aplikasi kini menampilkan arahan bila ESP masih mode setup:
+  *sambung hotspot `HALODECK-SETUP`, lalu buka `http://192.168.4.1`*.
+- Izin lokasi (`ACCESS_FINE/COARSE_LOCATION`) ikut dihapus dari manifest —
+  aplikasi tak pernah lagi meminta izin tersebut (hanya dipakai pindai Wi-Fi).
 
 ## Catatan teknis
 

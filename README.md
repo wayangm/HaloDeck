@@ -20,7 +20,7 @@ bersama Python portable.
    sampai selesai (instal per-user, **tanpa admin**).
 2. Konektor langsung menyala sebagai **tray icon** dan otomatis terdaftar di
    Startup Windows.
-3. Unduh **`HaloDeck-Android-1.0.0.apk`** → pindah ke HP → instal.
+3. Unduh **`HaloDeck-Android-1.0.2.apk`** → pindah ke HP → instal.
    *Uninstall dulu aplikasi lama (`com.wgmedia.macropad`) bila ada.*
 4. Flash ESP8266 dengan **`HaloDeck-ESP-1.0.0.bin`** (lihat bagian *Firmware*),
    lalu buka aplikasi **HaloDeck** di HP — IP ESP ditemukan otomatis lewat UDP.
@@ -157,7 +157,7 @@ Berkas:
 
 ### 3. Aplikasi Android
 
-**Cara cepat:** unduh **`HaloDeck-Android-1.0.0.apk`** dari
+**Cara cepat:** unduh **`HaloDeck-Android-1.0.2.apk`** dari
 [Releases](https://github.com/wayangm/HaloDeck/releases) → pindah ke HP →
 buka untuk instal (izin "sumber tidak dikenal" perlu sekali).
 
@@ -175,6 +175,10 @@ buka untuk instal (izin "sumber tidak dikenal" perlu sekali).
   atau masukkan IP ESP8266 (dari Serial Monitor) port `8080` lalu **Hubungkan**.
 - Buka aplikasi lain di PC (Photoshop, Premiere, Notepad) — tombol di HP
   otomatis berganti mengikuti aplikasi aktif.
+- **Atur Wi-Fi ESP lewat browser**, bukan dari aplikasi: saat ESP belum
+  terkonfigurasi ia memancarkan hotspot `HALODECK-SETUP` → sambung, lalu buka
+  `http://192.168.4.1`. (Tombol "Atur Wi-Fi" sudah dihapus dari aplikasi —
+  ESP berhenti memancarkan hotspot begitu kredensial tersimpan.)
 
 ### 4. Pembaruan Otomatis (GitHub Releases)
 

@@ -52,28 +52,13 @@
                 android:textSize="15sp" />
         </LinearLayout>
 
-        <!-- Baris tombol: Hubungkan + Atur Wi-Fi -->
-        <LinearLayout
+        <!-- Baris tombol: Hubungkan (temuan otomatis; bisa dicabut manual) -->
+        <Button
+            android:id="@+id/tombolHubungkan"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="8dp">
-
-            <Button
-                android:id="@+id/tombolHubungkan"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/tombol_hubungkan" />
-
-            <Button
-                android:id="@+id/tombolAturWifi"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Atur Wi-Fi ESP"
-                android:layout_marginStart="8dp" />
-        </LinearLayout>
+            android:layout_marginTop="8dp"
+            android:text="@string/tombol_hubungkan" />
 
         <!-- Status koneksi -->
         <TextView
