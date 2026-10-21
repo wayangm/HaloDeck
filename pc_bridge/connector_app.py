@@ -311,8 +311,6 @@ class KonektorTray:
         self.lock_instance = kunci_instance()
         self.tray = None
         self.jendela = None                    # Jendela UI (tkinter), bila tersedia
-        self.port_target = PORT_TARGET         # dibaca UI untuk ditampilkan
-        self.baud_rate = BAUD_RATE
         self.versi_app = VERSI
         # Pengelola pembaruan dari GitHub Releases (lihat updater.py)
         self.updater = updater.PengelolaUpdate(
@@ -327,7 +325,12 @@ class KonektorTray:
 
         catat("=== KONEKTOR HALODECK DIMULAIKAN ===")
         catat(f"Versi aplikasi: {VERSI}")
-        catat(f"Port: {PORT_TARGET} @ {BAUD_RATE}")
+        catat(f"Jalur koneksi  : USB {PORT_TARGET} (utama) -> "
+              f"Wi-Fi TCP {PORT_TCP_PC} (otomatis bila kabel lepas)")
+        if HOST_TARGET:
+            catat(f"Target Wi-Fi   : {HOST_TARGET} (statis)")
+        else:
+            catat("Target Wi-Fi   : dicari otomatis lewat UDP discovery")
         migrasi_nama_startup()
         self.bridge.mulai()
         self.updater.mulai()

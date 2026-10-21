@@ -150,12 +150,29 @@ class ManajerSerial:
             return False
 
     def pastikan_sambungan(self):
-        """Cek koneksi; kalau putus, coba sambung ulang."""
-        if self.koneksi and self.koneksi.is_open:
+        """Cek koneksi; kalau putus, coba sambung ulang.
+
+        Catatan penting: saat kabel USB dicabut, pyserial TETAP melaporkan
+        is_open = True karena handle port tidak ditutup oleh sistem. Maka
+        is_open saja TIDAK cukup -- status_tersambung (yang dimatikan oleh
+        kirim() yang gagal menulis) ikut diperiksa, dan port ditutup dulu
+        sebelum mencoba membuka ulang.
+        """
+        if self.koneksi and self.koneksi.is_open and self.status_tersambung:
             return True
-        self.status_tersambung = False
+        self.tutup()
         print("[SERIAL] Koneksi putus, mencoba sambung ulang...")
         return self.coba_sambung()
+
+    def tutup(self):
+        """Tutup port serial dan tandai terputus (aman dipanggil berulang)."""
+        try:
+            if self.koneksi:
+                self.koneksi.close()
+        except Exception:
+            pass
+        self.koneksi = None
+        self.status_tersambung = False
 
     def kirim(self, perintah):
         """Kirim perintah string ke ESP8266 (ditambah newline)."""
@@ -410,16 +427,32 @@ class ManajerOtomatis:
         return "belum tersambung"
 
     def coba_sambung(self):
-        """Coba sambung: serial dulu, baru jaringan. Berhasil -> True."""
-        if self.jalur == "serial" and self.serial_mgr.coba_sambung():
-            return True
-        if self.jaringan_mgr.coba_sambung():
-            self.jalur = "jaringan"
-            return True
-        # Coba serial sekali lagi (kabel mungkin baru saja dipasang)
-        if self.jalur != "serial" and self.serial_mgr.coba_sambung():
-            self.jalur = "serial"
-            return True
+        """Coba sambung. Berhasil -> True.
+
+        Urutan percobaan:
+          - Jalur yang SEDANG dipakai dicoba ulang lebih dulu, supaya tidak
+            berpindah-pindah saat koneksi sedang goyang.
+          - Saat mulai (belum ada jalur aktif) atau jalur aktifnya serial,
+            USB diprioritaskan; kalau kabel tidak ada, otomatis jatuh ke Wi-Fi.
+        """
+        jalur_serial_dulu = self.jalur != "jaringan"
+        for jalur in ("serial", "jaringan") if jalur_serial_dulu \
+                else ("jaringan", "serial"):
+            if jalur == "serial":
+                if self.serial_mgr.coba_sambung():
+                    self.jalur = "serial"
+                    return True
+            elif self.jaringan_mgr.coba_sambung():
+                # Lepas kunci port serial supaya COM tidak tetap terbuka
+                try:
+                    if self.serial_mgr.koneksi:
+                        self.serial_mgr.koneksi.close()
+                except Exception:
+                    pass
+                self.serial_mgr.koneksi = None
+                self.serial_mgr.status_tersambung = False
+                self.jalur = "jaringan"
+                return True
         self.jalur = None
         return False
 
@@ -445,11 +478,7 @@ class ManajerOtomatis:
         return False
 
     def _pindah_jalur_ke_jaringan(self):
-        if self.serial_mgr.koneksi:
-            try:
-                self.serial_mgr.koneksi.close()
-            except Exception:
-                pass
+        self.serial_mgr.tutup()
         if self.jaringan_mgr.coba_sambung():
             self.jalur = "jaringan"
             catat_jalur(f"[JALUR] Pindah ke Wi-Fi ({self.jalur_terpakai})")
@@ -458,12 +487,22 @@ class ManajerOtomatis:
         return False
 
     def kirim(self, perintah):
-        """Kirim perintah ke ESP8266 lewat jalur yang sedang aktif."""
-        if not self.pastikan_sambungan():
-            return False
+        """Kirim perintah ke ESP8266 lewat jalur yang sedang aktif.
+
+        Bila pengiriman gagal (kabel baru dicabut / Wi-Fi baru putus), jalur
+        ditandai mati oleh manajernya, lalu percobaan diulang SEKALI -- kali
+        ini pastikan_sambungan() akan membawa kita ke jalur lain.
+        """
+        if self.pastikan_sambungan() and self._kirim_aktif(perintah):
+            return True
+        return self.pastikan_sambungan() and self._kirim_aktif(perintah)
+
+    def _kirim_aktif(self, perintah):
         if self.jalur == "jaringan":
             return self.jaringan_mgr.kirim(perintah)
-        return self.serial_mgr.kirim(perintah)
+        if self.jalur == "serial":
+            return self.serial_mgr.kirim(perintah)
+        return False
 
     def putus(self):
         """Tutup koneksi aktif tanpa mencoba sambung ulang."""
@@ -472,11 +511,9 @@ class ManajerOtomatis:
         except Exception:
             pass
         try:
-            if self.serial_mgr.koneksi:
-                self.serial_mgr.koneksi.close()
+            self.serial_mgr.tutup()
         except Exception:
             pass
-        self.serial_mgr.status_tersambung = False
         self.jalur = None
 
     def baca_balasan(self):
