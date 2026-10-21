@@ -140,6 +140,12 @@ class MainActivity : Activity() {
     @Volatile private var penulis: OutputStreamWriter? = null
     @Volatile private var terhubung = false
     @Volatile private var pencarianAktif = false
+    // Nomor generasi koneksi. Setiap socket baru bernomor naik. Pembaca dari
+    // socket LAMA tak boleh menyentuh status/connect lagi — kalau tidak,
+    // ia menutup koneksi baru (lihat sambungTcp) dan memicu loop konek-putus.
+    @Volatile private var generasi = 0
+    // Cegat agar hanya ADA SATU reconnect berjalan pada satu waktu
+    @Volatile private var sedangReconnect = false
     private var profilSekarang = "DEFAULT"
     private var ipTersimpan = ""          // IP hasil temuan otomatis
 
@@ -326,16 +332,33 @@ class MainActivity : Activity() {
     // ============================================================
     // KONEKSI TCP (dipakai temuan otomatis maupun manual)
     // ============================================================
+    // Gerbang tunggal untuk SEMUA upaya sambung (thread pencarian, reconnect,
+    // maupun tombol manual). Tanpa gembok ini dua thread bisa membuka dua
+    // socket bersamaan; ESP hanya menyimpan SATU client, jadi yang satu
+    // menutup yang lain -> pembaca yang terusir mati, reconnect, menutup
+    // lagi -> LOOP KONEK-PUTUS tak berujung.
     private fun sambungTcp(ip: String): Boolean {
-        return try {
+        synchronized(this) {
+            if (terhubung) return true       // sudah tersambung — jangan dobel
+
             val s = Socket()
-            s.connect(InetSocketAddress(ip, 8080), 4000)
-            s.tcpNoDelay = true
+            try {
+                s.connect(InetSocketAddress(ip, 8080), 4000)
+                s.tcpNoDelay = true
+            } catch (_: Exception) {
+                try { s.close() } catch (_: Exception) {}
+                return false
+            }
+
+            // Socket lama (kalau masih ada) ditutup dulu sebelum mengganti
+            val lama = socket
+            generasi += 1                    // penanda: ini koneksi terbaru
             socket = s
             penulis = OutputStreamWriter(s.getOutputStream(), "UTF-8")
             terhubung = true
             ipTersimpan = ip
-            mulaiPembaca(s)
+            mulaiPembaca(s, generasi)
+            try { lama?.close() } catch (_: Exception) {}
 
             uiHandler.post {
                 teksStatus.text = "Terhubung otomatis ($ip)"
@@ -343,17 +366,15 @@ class MainActivity : Activity() {
                 tombolHubungkan.text = "Putuskan"
                 kirimPerintah("STAT")
             }
-            true
-        } catch (_: Exception) {
-            false
+            return true
         }
     }
 
-    private fun mulaiPembaca(s: Socket) {
+    private fun mulaiPembaca(s: Socket, milik: Int) {
         Thread {
             try {
                 val pembaca = BufferedReader(InputStreamReader(s.getInputStream(), "UTF-8"))
-                while (terhubung) {
+                while (terhubung && generasi == milik) {
                     val baris = pembaca.readLine() ?: break
                     prosesBalasan(baris.trim())
                 }
@@ -363,22 +384,43 @@ class MainActivity : Activity() {
                 // Koneksi terputus / error jaringan — wajar, tidak perlu crash
                 Log.d("HaloDeck", "Pembaca berhenti: ${e.message}")
             }
-            // Koneksi mati -> AUTO-CARI & SAMBUNG ULANG
+
+            // PEMBACA BASI: socket ini sudah digantikan koneksi lebih baru
+            // (generasi berubah) atau sudah ditutup lewat putusKoneksi().
+            // DIAM saja — jangan sentuh status, jangan sambung ulang.
+            // Tanpa cek ini, socket lama yang di-close akan memicu reconnect
+            // yang menutup koneksi baru -> loop konek-putus.
+            if (generasi != milik) {
+                Log.d("HaloDeck", "Pembaca basi (gen $milik vs $generasi) — diabaikan")
+                return@Thread
+            }
+
+            // Koneksi benar-benar mati -> AUTO-CARI & SAMBUNG ULANG
             if (terhubung) {
                 terhubung = false
                 uiHandler.post {
                     teksStatus.text = "Terputus — mencari ulang otomatis..."
                     teksStatus.setTextColor(getColor(R.color.aksen_merah))
                     tombolHubungkan.text = "Mencari..."
-                    // Coba sambung lagi ke IP terakhir dulu (cepat)
+                }
+                // Coba sambung lagi ke IP terakhir dulu (cepat), satu-satunya
+                // jalur — supaya tak ada dua thread reconnect bersamaan.
+                if (!sedangReconnect && ipTersimpan.isNotEmpty()) {
+                    sedangReconnect = true
                     Thread {
-                        Thread.sleep(1500)
-                        if (!terhubung && ipTersimpan.isNotEmpty()) {
-                            if (!sambungTcp(ipTersimpan)) mulaiPencarian()
-                        } else if (!terhubung) {
-                            mulaiPencarian()
+                        try {
+                            Thread.sleep(1500)
+                            val oke = !terhubung && sedangReconnect &&
+                                      sambungTcp(ipTersimpan)
+                            if (!oke && !terhubung) mulaiPencarian()
+                        } catch (_: InterruptedException) {
+                            // dilepas saat activity ditutup
+                        } finally {
+                            sedangReconnect = false
                         }
                     }.start()
+                } else if (!sedangReconnect) {
+                    mulaiPencarian()
                 }
             }
         }.start()
@@ -394,6 +436,10 @@ class MainActivity : Activity() {
     private fun putusKoneksi() {
         terhubung = false
         pencarianAktif = false
+        sedangReconnect = false
+        // Naikkan generasi -> pembaca lama tahu socketnya sudah basi dan
+        // tidak akan memicu auto-reconnect (menutup loop konek-putus)
+        generasi += 1
         try { socket?.close() } catch (_: Exception) {}
         socket = null
         penulis = null
