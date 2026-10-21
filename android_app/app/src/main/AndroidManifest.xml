@@ -7,6 +7,10 @@
     <!-- Izin status jaringan: DIPERLUKAN untuk registerNetworkCallback
          (pantau koneksi otomatis). Tanpa ini aplikasi gagal start. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Izin multicast: WAJIB agar paket balasan DISCOVER (UDP 8081) dari
+         ESP8266 diterima. Android membuang paket multicast/broadcast saat
+         Wi-Fi hemat daya bila aplikasi tidak memegang MulticastLock. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Catatan: izin lokasi (untuk pindai Wi-Fi) DIHAPUS bersama tombol
          "Atur Wi-Fi" — konfigurasi Wi-Fi kini lewat portal browser ESP. -->
 

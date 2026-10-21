@@ -21,6 +21,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -127,6 +128,13 @@ class MainActivity : Activity() {
     private lateinit var teksProfil: TextView
     private lateinit var gridMakro: GridLayout
 
+    // --- Multicast lock untuk temuan UDP ---
+    // MulticastLock WAJIB: banyak router membuang paket broadcast/multicast
+    // (termasuk balasan DISCOVER dari ESP) untuk perangkat Android yang tidak
+    // memegang kunci ini. Tanpa ini ESP tidak akan pernah ditemukan.
+    private lateinit var wifiManager: WifiManager
+    private lateinit var multicastLock: WifiManager.MulticastLock
+
     // --- Status koneksi ---
     @Volatile private var socket: Socket? = null
     @Volatile private var penulis: OutputStreamWriter? = null
@@ -153,6 +161,22 @@ class MainActivity : Activity() {
 
         cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
+        // --- Siapkan kunci multicast untuk temuan UDP ---
+        // Android membuang paket multicast/broadcast dari Wi-Fi saat driver
+        // hemat daya, kecuali aplikasi memegang MulticastLock. Tanpa ini
+        // balasan DISCOVER dari ESP8266 sering tidak pernah sampai.
+        wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        multicastLock = wifiManager.createMulticastLock("HaloDeckDiscovery").apply {
+            setReferenceCounted(false)   // acquire() sekali cukup
+        }
+        try {
+            multicastLock.acquire()
+        } catch (e: Exception) {
+            // Izin CHANGE_WIFI_MULTICAST_STATE tidak ada -> temuan UDP
+            // tetap dicoba, hanya peluangnya lebih kecil
+            Log.w("HaloDeck", "MulticastLock tidak bisa dipegang: ${e.message}")
+        }
+
         bangunGridMakro(profilSekarang)
 
         // --- MULAI PENCARIAN OTOMATIS saat aplikasi dibuka ---
@@ -174,6 +198,10 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         super.onDestroy()
         putusKoneksi()
+        // Lepas kunci multicast agar Wi-Fi bisa kembali hemat daya
+        try {
+            if (multicastLock.isHeld) multicastLock.release()
+        } catch (_: Exception) {}
     }
 
     // ============================================================
@@ -259,8 +287,11 @@ class MainActivity : Activity() {
                     try {
                         sock.receive(paket)
                         val isi = String(paket.data, 0, paket.length).trim()
-                        // Format: HALODECK:<MODE>:<IP>
-                        if (isi.startsWith("HALODECK:")) {
+                        // Format: HALODECK:<MODE>:<IP> (firmware v1.0.2+)
+                        //      atau MACROPAD:<MODE>:<IP> (firmware lama pre-rebrand)
+                        // Keduanya diterima agar ESP yang belum di-flash ulang
+                        // tetap bisa ditemukan oleh aplikasi versi baru.
+                        if (isi.startsWith("HALODECK:") || isi.startsWith("MACROPAD:")) {
                             val bagian = isi.split(":")
                             if (bagian.size == 3 && bagian[1] == "STA") {
                                 // PENTING: pakai ALAMAT PENGIRIM paket,
