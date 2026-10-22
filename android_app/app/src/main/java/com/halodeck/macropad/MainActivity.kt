@@ -25,6 +25,7 @@ import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.widget.Button
@@ -146,11 +147,31 @@ class MainActivity : Activity() {
     @Volatile private var generasi = 0
     // Cegat agar hanya ADA SATU reconnect berjalan pada satu waktu
     @Volatile private var sedangReconnect = false
+    // Waktu (elapsedRealtime) saat TERAKHIR menerima data dari ESP.
+    // Patokan hidup-matinya koneksi. Penting: bila jalur putus diam-diam
+    // (daya ESP hilang, AP restart), tidak ada FIN/RST yang sampai sehingga
+    // readLine() memblokir selamanya TANPA exception. Tanpa patokan waktu ini
+    // aplikasi akan buta selamanya terhadap koneksi yang sudah mati.
+    @Volatile private var terakhirBalasan = 0L
     private var profilSekarang = "DEFAULT"
     private var ipTersimpan = ""          // IP hasil temuan otomatis
 
     private lateinit var cm: ConnectivityManager
     val uiHandler = Handler(Looper.getMainLooper())
+
+    companion object {
+        private const val TAG = "HaloDeck"
+        // Heartbeat PING ke ESP. Disamakan dengan INTERVAL_PING pada
+        // konektor PC (5 detik) agar beban ke ESP seimbang dan konsisten.
+        private const val INTERVAL_HEARTBEAT_MS = 5000L
+        // soTimeout pembaca: pembaca TERBANGUN tiap 3 detik walau tidak ada
+        // data, sehingga tidak bisa memblokir selamanya pada socket mati.
+        private const val TIMEOUT_BACA_MS = 3000
+        // Bila senyap lebih lama dari ini (2x heartbeat terlewat), koneksi
+        // dianggap mati. Memberi toleransi agar tidak salah deteksi saat
+        // jaringan sedang sibuk.
+        private const val BATAS_SEPI_MS = 12000L
+    }
 
     // ============================================================
     // LIFECYCLE
@@ -345,6 +366,9 @@ class MainActivity : Activity() {
             try {
                 s.connect(InetSocketAddress(ip, 8080), 4000)
                 s.tcpNoDelay = true
+                // Tanpa soTimeout ini readLine() bisa memblokir selamanya
+                // bila jalur putus diam-diam (lihat keterangan terakhirBalasan)
+                s.soTimeout = TIMEOUT_BACA_MS
             } catch (_: Exception) {
                 try { s.close() } catch (_: Exception) {}
                 return false
@@ -357,7 +381,11 @@ class MainActivity : Activity() {
             penulis = OutputStreamWriter(s.getOutputStream(), "UTF-8")
             terhubung = true
             ipTersimpan = ip
+            // Mulai dari nol: koneksi BARU masih segar, jadi jangan langsung
+            // dianggap senyap oleh pembaca.
+            terakhirBalasan = SystemClock.elapsedRealtime()
             mulaiPembaca(s, generasi)
+            mulaiHeartbeat(generasi)
             try { lama?.close() } catch (_: Exception) {}
 
             uiHandler.post {
@@ -375,14 +403,33 @@ class MainActivity : Activity() {
             try {
                 val pembaca = BufferedReader(InputStreamReader(s.getInputStream(), "UTF-8"))
                 while (terhubung && generasi == milik) {
-                    val baris = pembaca.readLine() ?: break
+                    // readLine() akan melempar SocketTimeoutException tiap
+                    // TIMEOUT_BACA_MS bila senyap. Bukan kesalahan -- justru
+                    // itulah yang membuat pembaca bisa memeriksa kesehatan
+                    // koneksi dan tidak terkunci selamanya.
+                    val baris: String? = try {
+                        pembaca.readLine()
+                    } catch (e: SocketTimeoutException) {
+                        if (SystemClock.elapsedRealtime() - terakhirBalasan
+                            > BATAS_SEPI_MS) {
+                            // Senyap terlalu lama walau heartbeat terkirim ->
+                            // jalur mati DIAM-DIAM (tak ada FIN/RST yang sampai)
+                            Log.d(TAG, "Pembaca senyap > ${BATAS_SEPI_MS}ms — " +
+                                       "menganggap koneksi mati")
+                            null
+                        } else {
+                            continue          // masih hidup, giliran berikutnya
+                        }
+                    }
+                    if (baris == null) break
+                    terakhirBalasan = SystemClock.elapsedRealtime()
                     prosesBalasan(baris.trim())
                 }
             } catch (_: InterruptedException) {
                 // Thread dihentikan
             } catch (e: Exception) {
                 // Koneksi terputus / error jaringan — wajar, tidak perlu crash
-                Log.d("HaloDeck", "Pembaca berhenti: ${e.message}")
+                Log.d(TAG, "Pembaca berhenti: ${e.message}")
             }
 
             // PEMBACA BASI: socket ini sudah digantikan koneksi lebih baru
@@ -391,39 +438,86 @@ class MainActivity : Activity() {
             // Tanpa cek ini, socket lama yang di-close akan memicu reconnect
             // yang menutup koneksi baru -> loop konek-putus.
             if (generasi != milik) {
-                Log.d("HaloDeck", "Pembaca basi (gen $milik vs $generasi) — diabaikan")
+                Log.d(TAG, "Pembaca basi (gen $milik vs $generasi) — diabaikan")
                 return@Thread
             }
 
-            // Koneksi benar-benar mati -> AUTO-CARI & SAMBUNG ULANG
-            if (terhubung) {
-                terhubung = false
-                uiHandler.post {
-                    teksStatus.text = "Terputus — mencari ulang otomatis..."
-                    teksStatus.setTextColor(getColor(R.color.aksen_merah))
-                    tombolHubungkan.text = "Mencari..."
+            picuReconnect(milik)
+        }.start()
+    }
+
+    // ============================================================
+    // HEARTBEAT: kirim PING berkala ke ESP (dia membalas PONG).
+    // Tanpa ini, koneksi yang mati diam-diam tak pernah terdeteksi: tidak
+    // ada data masuk, jadi pembaca tidak pernah bangun dari blokirnya.
+    // ============================================================
+    private fun mulaiHeartbeat(milik: Int) {
+        Thread {
+            while (terhubung && generasi == milik) {
+                try {
+                    Thread.sleep(INTERVAL_HEARTBEAT_MS)
+                } catch (_: InterruptedException) {
+                    return@Thread              // activity ditutup
                 }
-                // Coba sambung lagi ke IP terakhir dulu (cepat), satu-satunya
-                // jalur — supaya tak ada dua thread reconnect bersamaan.
-                if (!sedangReconnect && ipTersimpan.isNotEmpty()) {
-                    sedangReconnect = true
-                    Thread {
-                        try {
-                            Thread.sleep(1500)
-                            val oke = !terhubung && sedangReconnect &&
-                                      sambungTcp(ipTersimpan)
-                            if (!oke && !terhubung) mulaiPencarian()
-                        } catch (_: InterruptedException) {
-                            // dilepas saat activity ditutup
-                        } finally {
-                            sedangReconnect = false
-                        }
-                    }.start()
-                } else if (!sedangReconnect) {
-                    mulaiPencarian()
+                if (generasi != milik || !terhubung) return@Thread
+                try {
+                    penulis?.write("PING\n")
+                    penulis?.flush()
+                } catch (e: Exception) {
+                    // Gagal menulis berarti koneksi sudah mati. Pembaca tetap
+                    // yang menutup jalur (dia paling tahu keadaan socket-nya),
+                    // tapi di sini kita percepat agar tak menunggu penuh.
+                    Log.d(TAG, "Heartbeat gagal tulis: ${e.message}")
+                    picuReconnect(milik)
+                    return@Thread
                 }
             }
         }.start()
+    }
+
+    // ============================================================
+    // SATU-SATUNYA JALUR KELUAR saat koneksi dianggap mati.
+    // Dipanggil dari: pembaca keluar, pembaca senyap, heartbeat gagal tulis,
+    // dan kirimPerintah gagal tulis. Semua lewat satu tempat agar gembok
+    // sedangReconnect dan penjaga generasi berlaku KONSISTEN -- tanpa ini
+    // bisa ada dua jalur balapan menyambung dan memicu loop konek-putus.
+    // milik = nomor generasi pemanggil; bila sudah basi, DIAM.
+    // ============================================================
+    private fun picuReconnect(milik: Int) {
+        if (generasi != milik) return          // pemanggil basi, biarkan yang baru
+
+        synchronized(this) {
+            // Sudah ditangani orang lain ATAU sudah tersambung lagi -> jangan
+            // sentuh, supaya koneksi sehat tidak dibatalkan oleh pemanggil lama.
+            if (generasi != milik || !terhubung) return
+            terhubung = false
+        }
+
+        uiHandler.post {
+            teksStatus.text = "Terputus — mencari ulang otomatis..."
+            teksStatus.setTextColor(getColor(R.color.aksen_merah))
+            tombolHubungkan.text = "Mencari..."
+        }
+
+        // Coba sambung lagi ke IP terakhir dulu (cepat). Gembok
+        // sedangReconnect menjamin hanya SATU thread reconnect berjalan.
+        if (!sedangReconnect && ipTersimpan.isNotEmpty()) {
+            sedangReconnect = true
+            Thread {
+                try {
+                    Thread.sleep(1500)
+                    val oke = !terhubung && sedangReconnect &&
+                              sambungTcp(ipTersimpan)
+                    if (!oke && !terhubung) mulaiPencarian()
+                } catch (_: InterruptedException) {
+                    // dilepas saat activity ditutup
+                } finally {
+                    sedangReconnect = false
+                }
+            }.start()
+        } else if (!sedangReconnect) {
+            mulaiPencarian()
+        }
     }
 
     private fun putusKoneksiManual() {
@@ -507,12 +601,19 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Belum menemukan ESP8266!", Toast.LENGTH_SHORT).show()
             return
         }
+        val milik = generasi
         Thread {
             try {
                 penulis?.write(perintah + "\n")
                 penulis?.flush()
-            } catch (_: Exception) {
-                uiHandler.post { /* Koneksi mati, pembaca yang menangani */ }
+            } catch (e: Exception) {
+                // Gagal menulis = koneksi sudah mati. INILAH yang dulu membuat
+                // pengguna harus menekan tombol manual untuk "membangunkan"
+                // aplikasi: exception-nya ditelan, dan pembaca yang macet di
+                // readLine() tak pernah tahu. Sekarang langsung nyatakan mati
+                // supaya auto-reconnect berjalan tanpa perlu sentuhan pengguna.
+                Log.d(TAG, "Gagal kirim '$perintah': ${e.message}")
+                picuReconnect(milik)
             }
         }.start()
     }
