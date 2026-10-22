@@ -445,6 +445,17 @@ void prosesDataSerial(String data) {
     arg.toUpperCase();
     Serial.println("ACK:BTN:" + arg);
 
+  } else if (tipe == "VOL") {
+    // Volume PC -> teruskan ke HP, supaya posisi slider di HP ikut
+    // menyesuaikan (sinkron dua arah).
+    //
+    // PENTING: jangan pernah membalas "VOL:" lewat Serial.println di sini.
+    // Serial adalah jalur dari PC bridge, sehingga apapun yang ditulis ke
+    // situ akan dibaca bridge sebagai kiriman dari HP lalu dieksekusi
+    // sebagai volume baru. Itu membuat loop pantulan tak berujung.
+    // Cukup diteruskan ke HP, tanpa balasan apa pun.
+    kirimKeHP("VOL:" + arg);
+
   } else {
     Serial.println("ERR:PERINTAH_TIDAK_DIKENAL");
   }
