@@ -26,8 +26,10 @@ bersama Python portable.
    lalu buka aplikasi **HaloDeck** di HP — IP ESP ditemukan otomatis lewat UDP.
 
 > Ingin tanpa instalasi / mau lihat kodenya dulu? Unduh
-> `HaloDeck-Win-<versi>.zip` (kode `.py` murni) dan jalankan
-> `pythonw connector_app.py` dengan Python 3.10 + `pip install pyserial pystray pillow`.
+> `HaloDeck-Win-<versi>.zip` (kode `.py` murni), jalankan
+> `pip install -r requirements.txt`, lalu `pythonw connector_app.py`.
+> Daftar pustaka ada di `requirements.txt` (bukan ditulis manual di sini)
+> supaya tidak pernah menyimpang dari yang dipakai builder installer.
 
 ## Arsitektur
 

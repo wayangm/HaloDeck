@@ -34,7 +34,12 @@ from versi import VERSI  # noqa: E402
 # Python portable resmi (hanya "mesin", bukan bagian dari kode kita)
 PYTHON_EMBED = ("https://www.python.org/ftp/python/3.10.11/"
                 "python-3.10.11-embed-amd64.zip")
-PERINTAH_PIP = ["pyserial", "pystray", "pillow"]
+# Daftar pustaka pihak ketiga. SATU-SATUNYA SUMBER KEBENARAN ada di
+# pc_bridge/requirements.txt — README merujuk berkas yang sama, sehingga
+# daftar tidak lagi disimpan di dua tempat. Perpisahan itulah yang membuat
+# pyautogui tertinggal selama tiga rilis (1.0.0-1.0.2) dan menggagalkan
+# seluruh installer di mesin pengguna yang tidak punya Python.
+BERKAS_REQUIREMENTS = os.path.join(FOLDER_PC, "requirements.txt")
 # Berkas & folder Tcl/Tk (untuk jendela UI tkinter) yang disalin dari
 # instalasi Python Lengkap yang SUDAH ada di mesin.
 BERKAS_TK = ["tcl86t.dll", "tk86t.dll"]
@@ -55,6 +60,27 @@ ISCC_KANDIDAT = [
 
 def catat(pesan):
     print(f"[installer] {pesan}", flush=True)
+
+
+def baca_requirements():
+    """Baca daftar pustaka dari pc_bridge/requirements.txt.
+
+    Berkas itu satu-satunya sumber kebenaran agar daftar tidak lagi
+    disimpan di dua tempat (dulu: skrip build dan README) lalu menyimpang.
+    Komentar diawali '#' dan boleh menempel di belakang nama pustaka.
+    """
+    if not os.path.isfile(BERKAS_REQUIREMENTS):
+        raise SystemExit(f"GAGAL: {BERKAS_REQUIREMENTS} tidak ditemukan.")
+    daftar = []
+    with open(BERKAS_REQUIREMENTS, "r", encoding="utf-8") as f:
+        for baris in f:
+            baris = baris.split("#", 1)[0].strip()
+            if baris:
+                daftar.append(baris)
+    if not daftar:
+        raise SystemExit(
+            f"GAGAL: {BERKAS_REQUIREMENTS} tidak memuat pustaka apa pun.")
+    return daftar
 
 
 def cari_iscc():
@@ -192,6 +218,69 @@ def uji_tkinter():
     catat(f"Uji tkinter lulus ({keluar.stdout.strip()}).")
 
 
+# ---- Uji paket terhadap kondisi MESIN PENGGUNA (bukan mesin build) ----
+BERKAS_UJI_MODUL = "uji_modul_bersih.py"
+DAFTAR_MODUL_UJI = [
+    # Pustaka pihak ketiga yang wajib ikut terkemas
+    "serial", "pystray", "PIL", "tkinter",
+    "pyautogui", "pycaw", "comtypes",
+    # Modul aplikasi. Kegagalan `aksi` = konektor tak bisa start sama sekali
+    # karena connector_app.py melakukan `from aksi import ...` di tingkat modul.
+    "versi", "bridge_fase2a", "aksi", "ui_jendela", "updater",
+]
+
+
+def uji_modul_mesin_bersih():
+    """Uji SEMUA modul dalam mode mesin pengguna BERSIH.
+
+    PYTHONNOUSERSITE=1 mematikan site-packages milik pengguna, sehingga
+    runtime hanya boleh mengandalkan isinya sendiri. TANPA flag ini uji
+    bisa LOLOS PALSU: `import site` pada python310._pth membuat runtime
+    portabel ikut membaca instalasi Python milik mesin build (terbukti
+    mengambil comtypes dari %APPDATA%\\Roaming\\Python), padahal di mesin
+    pengguna yang tidak punya Python pustaka itu tidak ada.
+
+    Kondisi persis inilah yang menyembunyikan hilangnya pyautogui sampai
+    tiga rilis penuh (1.0.0, 1.0.1, 1.0.2) gagal start. Tanpa uji ini
+    kesalahan yang sama akan terulang dan baru ketahuan saat sudah sampai
+    ke tangan pengguna.
+    """
+    os.makedirs(FOLDER_BUILD, exist_ok=True)
+    berkas = os.path.join(FOLDER_BUILD, BERKAS_UJI_MODUL)
+    kode = (
+        "import importlib, sys\n"
+        f"sys.path.insert(0, {os.path.join(FOLDER_RUNTIME, 'app')!r})\n"
+        "gagal = []\n"
+        f"for nama in {DAFTAR_MODUL_UJI!r}:\n"
+        "    try:\n"
+        "        importlib.import_module(nama)\n"
+        "    except Exception as e:\n"
+        "        gagal.append('%s -> %s: %s' % (nama, type(e).__name__, e))\n"
+        "if gagal:\n"
+        "    print('\\n'.join(gagal))\n"
+        "    raise SystemExit(1)\n"
+        f"print('OK: {len(DAFTAR_MODUL_UJI)} modul terimpor')\n"
+    )
+    with open(berkas, "w", encoding="utf-8") as f:
+        f.write(kode)
+
+    env = dict(os.environ)
+    env["PYTHONNOUSERSITE"] = "1"
+    for kunci, folder in (("TCL_LIBRARY", "tcl8.6"), ("TK_LIBRARY", "tk8.6")):
+        jalur = os.path.join(FOLDER_RUNTIME, folder)
+        if os.path.isdir(jalur):
+            env[kunci] = jalur
+
+    keluar = subprocess.run([os.path.join(FOLDER_RUNTIME, "python.exe"), berkas],
+                            capture_output=True, text=True, env=env)
+    if keluar.returncode != 0:
+        raise SystemExit(
+            "GAGAL: paket belum siap untuk mesin pengguna TANPA Python.\n"
+            "Modul yang tidak tersedia pada runtime:\n"
+            + (keluar.stdout or "") + (keluar.stderr or ""))
+    catat(f"Uji mesin bersih lulus ({keluar.stdout.strip()}).")
+
+
 def siapkan_runtime(zip_python):
     if os.path.isdir(FOLDER_RUNTIME):
         shutil.rmtree(FOLDER_RUNTIME, ignore_errors=True)
@@ -208,13 +297,16 @@ def siapkan_runtime(zip_python):
     with open(pth, "w", encoding="utf-8") as f:
         f.write("\n".join(baris))
 
-    # Ambil dependensi pakai Python build (lebih sederhana daripada get-pip)
+    # Ambil dependensi pakai Python build (lebih sederhana daripada get-pip).
+    # `--target` menaruh pustaka ke folder runtime, TIDAK ke instalasi Python
+    # mesin build — instalasi Python pengguna tidak pernah disentuh.
     target = os.path.join(FOLDER_RUNTIME, "Lib", "site-packages")
     os.makedirs(target, exist_ok=True)
-    catat("Mengambil dependensi: " + ", ".join(PERINTAH_PIP) + " ...")
+    pustaka = baca_requirements()
+    catat("Mengambil dependensi: " + ", ".join(pustaka) + " ...")
     subprocess.run(
         [sys.executable, "-m", "pip", "install", "--target", target,
-         "--quiet", "--no-warn-script-location"] + PERINTAH_PIP,
+         "--quiet", "--no-warn-script-location", "-r", BERKAS_REQUIREMENTS],
         check=True,
     )
 
@@ -326,6 +418,10 @@ def utama():
     zip_python = unduh_python_embed()
     siapkan_runtime(zip_python)
     uji_tkinter()                      # pastikan jendela UI bisa dibangun
+    # WAJIB terakhir: pastikan paket lengkap untuk mesin TANPA Python.
+    # Tanpa langkah ini paket yang kurang pustaka tetap lolos build dan
+    # baru ketahuan saat pengguna mencoba menjalankannya.
+    uji_modul_mesin_bersih()
 
     iss = tulis_skrip_iss()
     os.makedirs(FOLDER_KELUARAN, exist_ok=True)

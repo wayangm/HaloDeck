@@ -1,0 +1,29 @@
+# Dependensi pihak ketiga untuk konektor Windows HaloDeck (pc_bridge)
+#
+# INI SATU-SATUNYA SUMBER KEBENARAN daftar pustaka. Dua tempat pernah
+# menyimpan daftar ini secara terpisah, lalu menyimpang: pyautogui
+# tertinggal di skrip build selama tiga rilis (1.0.0 - 1.0.2) sehingga
+# installer tidak bisa dijalankan sama sekali di mesin tanpa Python.
+#
+# Cara pakai:
+#   Pengguna versi zip :  pip install -r requirements.txt
+#   Build installer     :  dibaca otomatis oleh tools/buat_installer.py
+
+# komunikasi USB ke ESP8266
+pyserial
+
+# ikon tray Windows
+pystray
+
+# membuat ikon tray (PIL)
+pillow
+
+# makro keyboard — WAJIB, diimpor di baris teratas aksi.py
+pyautogui
+
+# kontrol volume Windows; pycaw menarik comtypes sebagai dependensinya
+pycaw
+
+# antarmuka COM yang dipakai pycaw (didaftarkan eksplisit agar tidak
+# bergantung pada resolusi dependensi transitif yang bisa berubah)
+comtypes
