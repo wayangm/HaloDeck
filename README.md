@@ -20,9 +20,9 @@ bersama Python portable.
    sampai selesai (instal per-user, **tanpa admin**).
 2. Konektor langsung menyala sebagai **tray icon** dan otomatis terdaftar di
    Startup Windows.
-3. Unduh **`HaloDeck-Android-1.0.2.apk`** → pindah ke HP → instal.
+3. Unduh **`HaloDeck-Android-1.1.0.apk`** → pindah ke HP → instal.
    *Uninstall dulu aplikasi lama (`com.wgmedia.macropad`) bila ada.*
-4. Flash ESP8266 dengan **`HaloDeck-ESP-1.0.0.bin`** (lihat bagian *Firmware*),
+4. Flash ESP8266 dengan **`HaloDeck-ESP-1.1.0.bin`** (lihat bagian *Firmware*),
    lalu buka aplikasi **HaloDeck** di HP — IP ESP ditemukan otomatis lewat UDP.
 
 > Ingin tanpa instalasi / mau lihat kodenya dulu? Unduh
@@ -89,15 +89,15 @@ HaloDeck/
 **Cara cepat — pakai berkas `.bin` dari rilis (tanpa Arduino IDE):**
 
 ```powershell
-# Unduh HaloDeck-ESP-1.0.0.bin dari rilis, lalu flash:
+# Unduh HaloDeck-ESP-1.1.0.bin dari rilis, lalu flash:
 pip install esptool
 esptool.py --port COM4 erase_flash
-esptool.py --port COM4 --baud 460800 write_flash 0x0 HaloDeck-ESP-1.0.0.bin
+esptool.py --port COM4 --baud 460800 write_flash 0x0 HaloDeck-ESP-1.1.0.bin
 ```
 
 | Berkas rilis | Untuk siapa |
 |---|---|
-| `HaloDeck-ESP-1.0.0.bin` | **Disarankan** — firmware final (fase2): portal setup `HALODECK-SETUP`, SSID tidak perlu diedit di kode |
+| `HaloDeck-ESP-1.1.0.bin` | **Disarankan** — firmware final (fase2): portal setup `HALODECK-SETUP`, SSID tidak perlu diedit di kode |
 | `HaloDeck-ESP-1.0.0-fase1c.bin` | Varian stabil (fase1c): Serial + Wi-Fi TCP, SSID diisi di kode |
 
 **Cara build sendiri (dari sumber):**
@@ -159,7 +159,7 @@ Berkas:
 
 ### 3. Aplikasi Android
 
-**Cara cepat:** unduh **`HaloDeck-Android-1.0.2.apk`** dari
+**Cara cepat:** unduh **`HaloDeck-Android-1.1.0.apk`** dari
 [Releases](https://github.com/wayangm/HaloDeck/releases) → pindah ke HP →
 buka untuk instal (izin "sumber tidak dikenal" perlu sekali).
 
@@ -212,7 +212,7 @@ buka lagi dirinya sendiri**.
 > (firmware), sehingga updater tiap komponen hanya mengambil paketnya sendiri.
 
 **Menu tray bagian pembaruan:**
-- `Versi 1.0.0 — ...` — status versi saat ini
+- `Versi 1.1.0 — ...` — status versi saat ini
 - `Periksa Pembaruan` — cek sekarang juga
 - `Pasang Pembaruan 1.1.0` — hanya muncul bila ada rilis lebih baru;
   muncul konfirmasi dulu, lalu aplikasi menutup diri, memasang, dan
@@ -237,9 +237,10 @@ python tools/buat_installer.py        # -> dist/HaloDeck-Win-Setup-<v>.exe + .sh
 arduino-cli compile --fqbn esp8266:esp8266:d1_mini --export-binaries firmware/macro_pad_fase2
 cp firmware/macro_pad_fase2/build/esp8266.esp8266.d1_mini/macro_pad_fase2.ino.bin dist/HaloDeck-ESP-<v>.bin
 
-# 3. (Bila Android berubah) build APK -> salin ke dist/
-android_app/gradlew assembleDebug
-cp android_app/app/build/outputs/apk/debug/app-debug.apk dist/HaloDeck-Android-<v>.apk
+# 3. (Bila Android berubah) build APK rilis -> salin ke dist/
+#    (signingConfig rilis sudah dikonfigurasi; hasilnya langsung terpasang)
+android_app/gradlew assembleRelease
+cp android_app/app/build/outputs/apk/release/app-release.apk dist/HaloDeck-Android-<v>.apk
 
 # 4. Beri label checksum pada tiap berkas, commit & push
 foreach ($f in Get-ChildItem dist/*-<v>.* -Exclude *.sha256) {
