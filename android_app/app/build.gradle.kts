@@ -16,9 +16,27 @@ android {
         versionName = "1.1.0"
     }
 
+    signingConfigs {
+        // Rilis ditandatangani dengan keystore debug mesin build.
+        //
+        // Ini bukan jalan pintas yang keliru: sidik jarinya SAMA PERSIS
+        // dengan yang dipakai rilis 1.0.0 dan 1.0.2 (diperiksa lewat
+        // apksigner), sehingga APK baru bisa dipasang TIMPA di atas yang
+        // lama tanpa perlu uninstall. Aplikasi didistribusikan lewat
+        // GitHub Releases, bukan Play Store, jadi syarat keystore rilis
+        // khusus yang disimpan jangka panjang tidak berlaku di sini.
+        create("rilis") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("rilis")
         }
     }
 
