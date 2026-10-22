@@ -1,14 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- String aplikasi (Bahasa Indonesia) -->
+<!-- String aplikasi (Bahasa Indonesia).
+     Catatan: label tombol makro TIDAK ada di sini — nama tombol ikut
+     profil di MainActivity.kt, karena bergantung aplikasi aktif. -->
 <resources>
     <string name="nama_aplikasi">HaloDeck</string>
     <string name="judul">HaloDeck</string>
-    <string name="label_ip">IP ESP8266:</string>
-    <string name="hint_ip">192.168.1.100</string>
-    <string name="label_port">Port:</string>
-    <string name="hint_port">8080</string>
-    <string name="tombol_hubungkan">Hubungkan</string>
-    <string name="tombol_putus">Putuskan</string>
-    <string name="status_awal">Terputus</string>
-    <string name="profil_awal">Profil: -</string>
+
+    <!-- Baris status koneksi (ringkas; IP tidak ditampilkan di layar utama) -->
+    <string name="status_mencari">Mencari ESP…</string>
+    <string name="status_tersambung">Tersambung</string>
+    <string name="status_terputus">Terputus</string>
+    <string name="status_manual">Diputus manual</string>
+    <string name="profil_kosong">—</string>
+
+    <!-- Limpahan (tombol ⋮) -->
+    <string name="menu_sambung_otomatis">Sambungkan otomatis</string>
+    <string name="menu_cari_ulang">Cari ulang sekarang</string>
+    <string name="menu_ubah_ip">Ubah IP manual…</string>
+    <string name="menu_putuskan">Putuskan</string>
+
+    <!-- Dialog IP manual -->
+    <string name="judul_dialog_ip">Alamat IP ESP8266</string>
+    <string name="pesan_dialog_ip">Kosongkan untuk kembali mencari otomatis.</string>
+    <string name="hint_ip">192.168.0.117</string>
+    <string name="tombol_simpan">Simpan</string>
+    <string name="tombol_batal">Batal</string>
 </resources>

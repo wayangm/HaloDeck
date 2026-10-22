@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Baris slider volume (bagian kelompok "Umum").
+     Membentang ke-3 kolom grid, bukan satu sel, karena slider adalah
+     kendali kontinu, bukan tombol makro. Susunannya:
+       ikon speaker | SeekBar (mengisi sisa lebar) | angka persen
+     Latar transparan tanpa ripple: baris ini bukan tombol, jadi tidak
+     boleh memberi kesan bisa ditekan. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp"
+    android:paddingTop="2dp"
+    android:paddingBottom="6dp">
+
+    <ImageView
+        android:id="@+id/ikon_volume"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_m_volume"
+        android:tint="@color/warna_ikon" />
+
+    <SeekBar
+        android:id="@+id/slider_volume"
+        android:layout_width="0dp"
+        android:layout_height="34dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="10dp"
+        android:layout_weight="1"
+        android:max="100"
+        android:progress="50"
+        android:progressDrawable="@drawable/slider_track"
+        android:splitTrack="false"
+        android:thumb="@drawable/slider_thumb"
+        android:thumbOffset="0dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp"
+        android:minHeight="0dp" />
+
+    <TextView
+        android:id="@+id/teks_volume"
+        android:layout_width="42dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:includeFontPadding="false"
+        android:text="50%"
+        android:textColor="@color/teks_redup"
+        android:textSize="13sp" />
+
+</LinearLayout>

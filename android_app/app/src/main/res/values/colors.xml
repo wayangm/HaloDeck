@@ -1,11 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Warna aplikasi -->
+<!-- Warna aplikasi HaloDeck.
+     Palet gelap yang tenang: latar biru-arang, permukaan sedikit lebih
+     terang. Aksen dipakai HANYA untuk status dan umpan balik tekan —
+     bukan untuk menghias semua tombol, agar layar penuh 15 tombol tidak
+     jadi berisik. -->
 <resources>
-    <color name="latar_gelap">#FF121212</color>
-    <color name="latar_kartu">#FF1E1E2E</color>
-    <color name="aksen_biru">#FF4FC3F7</color>
-    <color name="aksen_hijau">#FF66BB6A</color>
-    <color name="aksen_merah">#FFEF5350</color>
-    <color name="teks_utama">#FFFFFFFF</color>
-    <color name="teks_redup">#FF9E9E9E</color>
+    <color name="latar_gelap">#FF0E1116</color>
+    <color name="latar_kartu">#FF1B2029</color>
+    <color name="garis">#FF2C3440</color>
+    <color name="permukaan_tekan">#FF262D39</color>
+
+    <color name="aksen_biru">#FF4C8DFF</color>
+    <color name="aksen_hijau">#FF3DD68C</color>
+    <color name="aksen_kuning">#FFFFB84D</color>
+    <color name="aksen_merah">#FFFF6B6B</color>
+
+    <color name="teks_utama">#FFE6EAF0</color>
+    <color name="teks_redup">#FF8A94A6</color>
+    <color name="warna_ikon">#FFA3B4CE</color>
 </resources>

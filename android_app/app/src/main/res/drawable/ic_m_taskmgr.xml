@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikon tombol makro "taskmgr".
+     Sumber: Google Material Symbols (lisensi Apache-2.0), diubah dari
+     SVG menjadi VectorDrawable oleh tools/buat_ikon.py sehingga tidak
+     ada dependensi runtime yang ditambahkan.
+     Warna dasar putih; diberi warna lewat setColorFilter() di
+     MainActivity agar bisa berbeda per keadaan (normal/tekan/bahaya). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <group
+        android:translateX="0"
+        android:translateY="960">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M120-120v-80l80-80v160h-80Zm160 0v-240l80-80v320h-80Zm160 0v-320l80 81v239h-80Zm160 0v-239l80-80v319h-80Zm160 0v-400l80-80v480h-80ZM120-327v-113l280-280 160 160 280-280v113L560-447 400-607 120-327Z"/>
+    </group>
+</vector>

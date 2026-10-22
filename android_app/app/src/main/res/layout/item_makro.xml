@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Satu tombol makro: ikon di atas, nama fungsi di bawah.
+     Akar FrameLayout supaya ripple_makro yang jadi background tombol
+     membungkus isi dengan benar. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/ripple_makro"
+    android:clickable="true"
+    android:focusable="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:gravity="center">
+
+        <ImageView
+            android:id="@+id/ikon_makro"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_m_lock" />
+
+        <TextView
+            android:id="@+id/label_makro"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="7dp"
+            android:gravity="center"
+            android:maxLines="2"
+            android:minLines="2"
+            android:ellipsize="end"
+            android:textColor="@color/teks_utama"
+            android:textSize="11sp" />
+
+    </LinearLayout>
+
+</FrameLayout>

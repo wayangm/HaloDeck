@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gagang (thumb) slider volume: bulat terang dengan garis tepi warna
+     latar, supaya tetap terlihat jelas saat menimpa track biru.
+     Ukuran 24dp = dua kali inset horizontal pada slider_track.xml. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/teks_utama" />
+    <stroke
+        android:width="2dp"
+        android:color="@color/latar_gelap" />
+    <size
+        android:width="24dp"
+        android:height="24dp" />
+</shape>

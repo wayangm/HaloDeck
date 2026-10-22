@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikon tombol makro "ps_flatten".
+     Sumber: Google Material Symbols (lisensi Apache-2.0), diubah dari
+     SVG menjadi VectorDrawable oleh tools/buat_ikon.py sehingga tidak
+     ada dependensi runtime yang ditambahkan.
+     Warna dasar putih; diberi warna lewat setColorFilter() di
+     MainActivity agar bisa berbeda per keadaan (normal/tekan/bahaya). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <group
+        android:translateX="0"
+        android:translateY="960">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="m356-160-56-56 180-180 180 180-56 56-124-124-124 124Zm124-404L300-744l56-56 124 124 124-124 56 56-180 180Z"/>
+    </group>
+</vector>

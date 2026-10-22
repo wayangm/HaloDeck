@@ -26,7 +26,7 @@ sys.path.insert(0, FOLDER_INI)
 from bridge_fase2a import (DetektorJendela, ManajerOtomatis, ManajerTcp,
                            PEMETA_PROFIL, PROFIL_DEFAULT, PORT_TCP_PC)
 import bridge_fase2a
-from aksi import eksekusi_perintah
+from aksi import eksekusi_perintah, baca_volume
 from versi import VERSI
 import updater
 
@@ -42,6 +42,10 @@ BAUD_RATE     = 115200
 HOST_TARGET   = ""
 INTERVAL_POLL = 0.5
 INTERVAL_PING = 5.0
+# Jeda antar dorong volume PC -> HP. Lebih pendek dari ping agar slider
+# terasa responsif, tapi cukup jarang agar tidak membanjiri ESP (yang hanya
+# menyimpan SATU koneksi client per waktu).
+INTERVAL_VOLUME = 1.0
 BERKAS_LOG    = os.path.join(FOLDER_INI, "konektor.log")
 BERKAS_KUNCI  = os.path.join(FOLDER_INI, "konektor.lock")   # Anti 2 instance
 NAMA_RUN      = "HaloDeck Konektor"                         # Nama di startup Windows
@@ -52,6 +56,7 @@ status_lock = threading.Lock()
 state = {
     "tersambung": False,
     "profil": "-",
+    "volume": None,             # Volume PC terakhir (0-100) yang dikirim ke HP
     "pesan": "Memulai...",
     "jumlah_aksi": 0,
     "jalur": "-",               # "USB COM4" / "Wi-Fi 192.168.0.117:8082"
@@ -225,6 +230,9 @@ class KonektorBridge:
         self.berhenti = threading.Event()
         self.thread = None
         self.profil_terakhir = None
+        # Volume PC terakhir yang berhasil dikirim ke HP. Dipakai sebagai
+        # pembanding agar dorong volume hanya terjadi saat nilainya BERUBAH.
+        self.volume_terakhir = None
 
     def mulai(self):
         if self.thread and self.thread.is_alive():
@@ -246,6 +254,7 @@ class KonektorBridge:
 
     def _loop(self):
         waktu_ping = 0.0
+        waktu_volume = 0.0
         while not self.berhenti.is_set():
             try:
                 # --- Heartbeat PING berkala ---
@@ -279,6 +288,26 @@ class KonektorBridge:
                             self.profil_terakhir = profil
                             state["profil"] = profil
 
+                # --- DORONG VOLUME PC ke HP (slider dua arah) ---
+                # Volume dibaca dari Windows Audio lalu dikirim hanya bila
+                # BERUBAH, sehingga HP selalu tahu volume sebenarnya walau
+                # diubah lewat keyboard/tombol fisik. Dibatasi waktunya
+                # (INTERVAL_VOLUME) supaya tidak membanjiri jalur serial
+                # tiap 0,5 detik.
+                if (self.serial_mgr.status_tersambung
+                        and time.time() - waktu_volume >= INTERVAL_VOLUME):
+                    waktu_volume = time.time()
+                    volume = baca_volume()
+                    # baca_volume() bisa bernilai None bila PyCaw gagal
+                    # (mis. layar terkunci) -> jangan kirim apa pun.
+                    if volume is not None and volume != self.volume_terakhir:
+                        if self.serial_mgr.kirim(f"VOL:{volume}"):
+                            # Disimpan walau kirim gagal? TIDAK -- kalau gagal
+                            # nilai tidak dicatat, jadi percobaan berikutnya
+                            # mengirim ulang dan HP tetap sinkron.
+                            self.volume_terakhir = volume
+                            state["volume"] = volume
+
             except Exception as galat:
                 catat(f"Galat loop bridge: {galat}")
                 time.sleep(1)
@@ -293,6 +322,15 @@ class KonektorBridge:
                 if sukses:
                     state["jumlah_aksi"] += 1
             self.serial_mgr.kirim(f"ACK:{balasan}")
+        elif balasan.startswith("VOL:"):
+            # Slider volume di HP. Nilainya langsung diterapkan; TIDAK dikirim
+            # balik ke HP di sini, karena loop polling volume di bawah yang
+            # akan mendorong nilai terkini. Kalau dikirim dua kali, HP bisa
+            # memicu geseran pantul (feedback loop).
+            catat(f"Volume dari HP: {balasan[4:]}%")
+            eksekusi_perintah(balasan)
+            with status_lock:
+                state["jumlah_aksi"] += 1
         elif balasan == "PONG":
             pass   # Heartbeat rutin -> JANGAN dicatat (hemat log)
         elif balasan.startswith(("ACK:", "OK:", "ERR:")):

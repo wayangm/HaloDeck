@@ -1,111 +1,141 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Layout utama: koneksi OTOMATIS + grid tombol makro dinamis -->
+<!-- Layar utama HaloDeck.
+     Susunan atas-ke-bawah:
+       1. Baris judul + ikon ⋮
+       2. Pil status koneksi (titik warna + teks) dan nama profil aktif
+       3. Grid tombol makro (3 kolom, digulir, berkelompok)
+     Tidak ada kolom IP di sini lagi — cukup status koneksi saja,
+     karena penyambungan sudah otomatis.
+     keepScreenOn di root: layar HP tetap menyala saat dipakai sebagai
+     remote. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/akar"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:keepScreenOn="true"
-    android:padding="16dp">
+    android:background="@color/latar_gelap"
+    android:fitsSystemWindows="true">
 
-    <!-- Judul aplikasi -->
+    <!-- 1. Judul -->
     <TextView
+        android:id="@+id/teks_judul"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="12dp"
+        android:drawablePadding="9dp"
+        android:gravity="center_vertical"
+        android:drawableStart="@drawable/ic_m_taskmgr"
         android:text="@string/judul"
         android:textColor="@color/teks_utama"
         android:textSize="20sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:layout_marginBottom="16dp" />
+        android:textStyle="bold" />
 
-    <!-- Kartu status koneksi -->
+    <!-- 2. Baris status + profil -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:background="@color/latar_kartu"
-        android:padding="12dp"
-        android:layout_marginBottom="12dp">
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-        <!-- IP (diisi otomatis oleh temuan-otomatis, bisa diedit manual) -->
+        <!-- Pil status -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:id="@+id/pil_status"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_pil"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:paddingStart="12dp"
+            android:paddingEnd="13dp">
+
+            <View
+                android:id="@+id/titik_status"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@color/aksen_kuning" />
 
             <TextView
+                android:id="@+id/teks_status"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="IP: "
-                android:textColor="@color/teks_redup"
-                android:textSize="14sp" />
-
-            <EditText
-                android:id="@+id/inputIp"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="mencari otomatis..."
-                android:textColorHint="@color/teks_redup"
+                android:layout_marginStart="8dp"
+                android:maxLines="1"
+                android:text="@string/status_mencari"
                 android:textColor="@color/teks_utama"
-                android:inputType="text"
-                android:textSize="15sp" />
+                android:textSize="13sp" />
+
         </LinearLayout>
 
-        <!-- Baris tombol: Hubungkan (temuan otomatis; bisa dicabut manual) -->
-        <Button
-            android:id="@+id/tombolHubungkan"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="@string/tombol_hubungkan" />
-
-        <!-- Status koneksi -->
+        <!-- Nama profil aktif -->
         <TextView
-            android:id="@+id/teksStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/status_awal"
-            android:textColor="@color/aksen_merah"
-            android:textSize="14sp"
-            android:layout_marginTop="8dp" />
+            android:id="@+id/teks_profil"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_pil"
+            android:ellipsize="end"
+            android:gravity="center_vertical"
+            android:maxLines="1"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="@string/profil_kosong"
+            android:textColor="@color/teks_redup"
+            android:textSize="13sp" />
 
-        <!-- Profil aktif dari PC (context-switching) -->
-        <TextView
-            android:id="@+id/teksProfil"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/profil_awal"
-            android:textColor="@color/aksen_biru"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginTop="4dp" />
+        <!-- Ruang dorong supaya ⋮ menempel di kanan -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <!-- Tombol limpahan -->
+        <ImageButton
+            android:id="@+id/tombol_menu"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/menu_sambung_otomatis"
+            android:src="@drawable/ic_menu_limpahan"
+            android:tint="@color/teks_redup" />
+
     </LinearLayout>
 
-    <!-- Label grid makro -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Tombol makro (menyesuaikan profil aktif):"
-        android:textColor="@color/teks_redup"
-        android:textSize="13sp"
-        android:layout_marginBottom="8dp" />
-
-    <!-- Wadah tombol makro (diisi otomatis dari kode).
-         Dibungkus ScrollView agar profil dengan banyak tombol
-         tetap bisa diakses semua (mis. Browser: 15 tombol). -->
+    <!-- 3. Grid makro -->
     <ScrollView
+        android:id="@+id/gulir_makro"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:fillViewport="true">
+        android:fillViewport="true"
+        android:fadeScrollbars="false"
+        android:scrollbarThumbVertical="@color/garis">
 
-        <GridLayout
-            android:id="@+id/gridMakro"
+        <LinearLayout
+            android:id="@+id/wadah_grid"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:columnCount="2" />
+            android:orientation="vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="16dp">
+
+            <GridLayout
+                android:id="@+id/grid_makro"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:columnCount="3" />
+
+        </LinearLayout>
+
     </ScrollView>
 
 </LinearLayout>

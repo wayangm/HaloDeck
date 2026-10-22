@@ -59,6 +59,46 @@ def aksi_toggle_mute():
     return True
 
 
+# ============================================================
+# VOLUME (dipakai SLIDER di aplikasi Android)
+# Berbeda dari tombol makro yang hanya "toggle", slider butuh nilai
+# kontinu 0-100. Karena itu volumenya memakai awalan "VOL:" sendiri,
+# bukan "BTN:", dan ditangani terpisah di eksekusi_perintah().
+# ============================================================
+def set_volume(persen):
+    """Atur volume master speaker ke 0-100.
+
+    Nilai dijepit (clamp) dulu supaya kiriman dari HP yang tidak wajar
+    (mis. "150" atau "-5" karena bug slider) tetap aman.
+    """
+    if not _inisialisasi_audio():
+        return False
+    try:
+        batas = max(0, min(100, int(persen)))
+        # PyCaw memakai skala 0.0-1.0, sedangkan protokol memakai 0-100
+        _volume_interface.SetMasterVolumeLevelScalar(batas / 100.0, None)
+        print(f"[AKSI] Volume diatur ke {batas}%")
+        return True
+    except Exception as galat:
+        print(f"[AKSI] Gagal atur volume: {galat}")
+        return False
+
+
+def baca_volume():
+    """Baca volume master speaker sekarang (0-100), atau None bila gagal.
+
+    Dipakai bridge untuk mendorong volume PC ke HP, sehingga posisi slider
+    di HP selalu mencerminkan keadaan PC yang sebenarnya.
+    """
+    if not _inisialisasi_audio():
+        return None
+    try:
+        return round(_volume_interface.GetMasterVolumeLevelScalar() * 100)
+    except Exception as galat:
+        print(f"[AKSI] Gagal baca volume: {galat}")
+        return None
+
+
 def aksi_buka_browser():
     """Buka browser default Windows."""
     return webbrowser.open_new("https://www.google.com")
@@ -334,9 +374,24 @@ PEMETA_AKSI = {
 
 def eksekusi_perintah(perintah):
     """
-    Menerima string perintah (mis. "BTN:LOCK") dan mengeksekusinya.
+    Menerima string perintah dan mengeksekusinya.
+    Dua bentuk protokol yang dikenali:
+      "BTN:<AKSI>" -> tombol makro (nilai tunggal, tanpa argumen)
+      "VOL:<0-100>" -> setel volume master (dipakai slider di Android)
     Mengembalikan True bila dikenali & dijalankan.
     """
+    # --- Jalur slider volume (awalan VOL:, bukan BTN:) ---
+    if perintah.startswith("VOL:"):
+        nilai = perintah[4:].strip()
+        if not nilai.isdigit():
+            # Bukan angka -> jangan lempar error, hanya tolak dengan sopan.
+            # HP bisa mengirim nilai tak terduga saat slider digeser cepat.
+            print(f"[AKSI] Nilai volume tidak sah: {nilai!r}")
+            return False
+        sukses = set_volume(nilai)
+        print(f"[AKSI] Eksekusi VOL:{nilai}: {'BERHASIL' if sukses else 'GAGAL'}")
+        return sukses
+
     if not perintah.startswith("BTN:"):
         return False
 

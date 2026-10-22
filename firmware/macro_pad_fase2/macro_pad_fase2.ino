@@ -316,6 +316,11 @@ void prosesDataTcp(String data) {
     kirimKeHP("ACK:BTN:" + arg);
     kedipLed();
 
+  } else if (tipe == "VOL") {
+    // Slider volume dari HP. Angka murni, jadi TIDAK perlu toUpperCase
+    // dan TIDAK perlu LED kedip (kiriman bisa banyak saat digeser).
+    kirimKePC("VOL:" + arg);            // Teruskan ke PC (TCP 8082 + serial)
+
   } else if (tipe == "WIFI") {
     prosesPerintahWifi(arg);            // Simpan kredensial + restart
 
@@ -366,6 +371,11 @@ void prosesDataTcpPc(String data) {
     kirimKeHP("PROF:" + arg);           // Context-switching ke HP
     clientPc.println("ACK:PROF:" + arg);
     kedipLed();
+
+  } else if (tipe == "VOL") {
+    // Volume PC yang diubah lewat keyboard/tombol fisik -> teruskan ke HP
+    // supaya posisi slider di HP ikut menyesuaikan (sinkron dua arah).
+    kirimKeHP("VOL:" + arg);
 
   } else if (tipe == "ACK" || tipe == "ERR") {
     // Balasan konfirmasi -> jangan dibalas (hindari loop saling membalas)

@@ -1,22 +1,23 @@
 // ============================================================
-// HALODECK - FASE 3 (Android Native - FINAL)
-// MainActivity.kt (Bahasa Kotlin, tanpa library eksternal)
+// HALODECK - MainActivity.kt (Bahasa Kotlin, tanpa library eksternal)
 // Fitur:
-//  1. TEMUKAN OTOMATIS: UDP discovery -> IP ESP diisi sendiri,
+//  1. TEMUKAN OTOMATIS: UDP discovery -> IP ESP diketahui sendiri,
 //     auto-connect TCP tanpa ketik IP apa pun
 //  2. AUTO-RECONNECT: koneksi putus / jaringan siap lagi ->
 //     aplikasi langsung mencari & menyambung sendiri
-//  3. SETUP WI-FI: lewat portal browser ESP (hotspot HALODECK-SETUP ->
-//     http://192.168.4.1). Tombol "Atur Wi-Fi" di aplikasi DIHAPUS karena
-//     ESP tidak memancarkan hotspot lagi setelah terkonfigurasi
-//  4. Grid tombol MENYESUAIKAN PROFIL aktif di PC (context-switching)
+//  3. Grid tombol MENYESUAIKAN PROFIL aktif di PC (context-switching)
+//  4. Tampilan: baris status koneksi ringkas (tanpa IP), grid 3 kolom
+//     ikon + nama fungsi yang dikelompokkan per fungsi
 // Komentar dalam Bahasa Indonesia
 // ============================================================
 
 package com.halodeck.macropad
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
+import android.content.SharedPreferences
+import android.graphics.PorterDuff
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -28,9 +29,15 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
-import android.widget.Button
+import android.view.View
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.GridLayout
+import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.PopupMenu
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import java.io.BufferedReader
@@ -44,78 +51,96 @@ import java.net.SocketTimeoutException
 
 // ============================================================
 // DATA PROFIL + MAKRO (meniru pemeta di bridge PC)
+// ikon  = nama berkas drawable tanpa prefiks "ic_m_"
+// kelompok = judul bagian yang tampil di atas grid
+// bahaya = true -> tombol diberi nuansa merah (Kunci PC, Bisukan)
 // ============================================================
-data class Makro(val label: String, val perintah: String)
+data class Makro(
+    val kelompok: String,
+    val label: String,
+    val perintah: String,
+    val ikon: String,
+    val bahaya: Boolean = false
+)
 
 val PROFIL_MAKRO: Map<String, List<Makro>> = mapOf(
     "DEFAULT" to listOf(
-        Makro("Kunci PC",     "BTN:LOCK"),
-        Makro("Mute",         "BTN:MUTE"),
-        Makro("Browser",      "BTN:BROWSER"),
-        Makro("Task Manager", "BTN:TASKMGR")
+        Makro("Umum", "Kunci PC",       "BTN:LOCK",     "lock",   bahaya = true),
+        Makro("Umum", "Bisukan",        "BTN:MUTE",     "mute",   bahaya = true),
+        Makro("Umum", "Browser",        "BTN:BROWSER",  "browser"),
+        Makro("Umum", "Manajer Tugas",  "BTN:TASKMGR",  "taskmgr"),
+        Makro("Umum", "Notepad",        "BTN:NOTEPAD",  "notepad"),
+        Makro("Umum", "VS Code",        "BTN:VSCODE",   "vscode")
     ),
     "NOTEPAD" to listOf(
-        Makro("Simpan (Ctrl+S)", "BTN:SIMPAN"),
-        Makro("Baru (Ctrl+N)",   "BTN:BARU"),
-        Makro("Undo (Ctrl+Z)",   "BTN:UNDO"),
-        Makro("Redo (Ctrl+Y)",   "BTN:REDO")
+        Makro("Dokumen", "Simpan",       "BTN:SIMPAN",   "simpan"),
+        Makro("Dokumen", "Dokumen Baru", "BTN:BARU",     "baru"),
+        Makro("Dokumen", "Urungkan",     "BTN:UNDO",     "undo"),
+        Makro("Dokumen", "Ulangi",       "BTN:REDO",     "redo"),
+        Makro("Umum",    "Kunci PC",     "BTN:LOCK",     "lock",  bahaya = true),
+        Makro("Umum",    "Bisukan",      "BTN:MUTE",     "mute",  bahaya = true)
     ),
     "VSCODE" to listOf(
-        Makro("Simpan (Ctrl+S)", "BTN:SIMPAN"),
-        Makro("Undo (Ctrl+Z)",   "BTN:UNDO"),
-        Makro("Redo (Ctrl+Y)",   "BTN:REDO"),
-        Makro("Kunci PC",        "BTN:LOCK")
-    ),
-    "PHOTOSHOP" to listOf(
-        Makro("Zoom In",       "BTN:PS_ZOOMIN"),
-        Makro("Zoom Out",      "BTN:PS_ZOOMOUT"),
-        Makro("Fit Layar",     "BTN:PS_FIT"),
-        Makro("Layer Baru",    "BTN:PS_LAYER"),
-        Makro("Flatten Image", "BTN:PS_FLATTEN"),
-        Makro("Mute",          "BTN:MUTE")
-    ),
-    "PREMIERE" to listOf(
-        Makro("Undo",         "BTN:PR_UNDO"),
-        Makro("Cut (Ctrl+K)", "BTN:PR_CUT"),
-        Makro("Mark In",      "BTN:PR_IN"),
-        Makro("Mark Out",     "BTN:PR_OUT"),
-        Makro("Export Frame", "BTN:PR_EXPORT"),
-        Makro("Mute",         "BTN:MUTE")
+        Makro("Dokumen", "Simpan",   "BTN:SIMPAN", "simpan"),
+        Makro("Dokumen", "Urungkan", "BTN:UNDO",   "undo"),
+        Makro("Dokumen", "Ulangi",   "BTN:REDO",   "redo"),
+        Makro("Umum",    "Kunci PC", "BTN:LOCK",   "lock", bahaya = true),
+        Makro("Umum",    "Bisukan",  "BTN:MUTE",   "mute", bahaya = true)
     ),
     "AFTEREFFECTS" to listOf(
-        Makro("Undo",     "BTN:UNDO"),
-        Makro("Redo",     "BTN:REDO"),
-        Makro("Mute",     "BTN:MUTE"),
-        Makro("Kunci PC", "BTN:LOCK")
+        Makro("Dokumen", "Urungkan", "BTN:UNDO", "undo"),
+        Makro("Dokumen", "Ulangi",   "BTN:REDO", "redo"),
+        Makro("Umum",    "Kunci PC", "BTN:LOCK", "lock", bahaya = true),
+        Makro("Umum",    "Bisukan",  "BTN:MUTE", "mute", bahaya = true)
     ),
     "ILLUSTRATOR" to listOf(
-        Makro("Simpan", "BTN:SIMPAN"),
-        Makro("Baru",   "BTN:BARU"),
-        Makro("Undo",   "BTN:UNDO"),
-        Makro("Mute",   "BTN:MUTE")
+        Makro("Gambar",   "Perbesar",      "BTN:PS_ZOOMIN",  "ps_zoomin"),
+        Makro("Gambar",   "Perkecil",      "BTN:PS_ZOOMOUT", "ps_zoomout"),
+        Makro("Gambar",   "Pas Layar",     "BTN:PS_FIT",     "ps_fit"),
+        Makro("Gambar",   "Lapisan Baru",  "BTN:PS_LAYER",   "ps_layer"),
+        Makro("Dokumen",  "Simpan",        "BTN:SIMPAN",     "simpan"),
+        Makro("Dokumen",  "Dokumen Baru",  "BTN:BARU",       "baru"),
+        Makro("Dokumen",  "Urungkan",      "BTN:UNDO",       "undo"),
+        Makro("Dokumen",  "Ulangi",        "BTN:REDO",       "redo"),
+        Makro("Umum",     "Bisukan",       "BTN:MUTE",       "mute", bahaya = true)
+    ),
+    "PHOTOSHOP" to listOf(
+        Makro("Gambar",   "Perbesar",     "BTN:PS_ZOOMIN",  "ps_zoomin"),
+        Makro("Gambar",   "Perkecil",     "BTN:PS_ZOOMOUT", "ps_zoomout"),
+        Makro("Gambar",   "Pas Layar",    "BTN:PS_FIT",     "ps_fit"),
+        Makro("Gambar",   "Lapisan Baru", "BTN:PS_LAYER",   "ps_layer"),
+        Makro("Gambar",   "Ratakan",      "BTN:PS_FLATTEN", "ps_flatten"),
+        Makro("Dokumen",  "Urungkan",     "BTN:UNDO",       "undo"),
+        Makro("Dokumen",  "Ulangi",       "BTN:REDO",       "redo"),
+        Makro("Umum",     "Bisukan",      "BTN:MUTE",       "mute", bahaya = true)
+    ),
+    "PREMIERE" to listOf(
+        Makro("Timeline", "Urungkan",     "BTN:PR_UNDO",    "undo"),
+        Makro("Timeline", "Pangkas",      "BTN:PR_CUT",     "pr_cut"),
+        Makro("Timeline", "Tandai Masuk", "BTN:PR_IN",      "pr_in"),
+        Makro("Timeline", "Tandai Keluar","BTN:PR_OUT",     "pr_out"),
+        Makro("Timeline", "Ekspor Frame", "BTN:PR_EXPORT",  "pr_export"),
+        Makro("Dokumen",  "Simpan",       "BTN:SIMPAN",     "simpan"),
+        Makro("Umum",     "Bisukan",      "BTN:MUTE",       "mute", bahaya = true),
+        Makro("Umum",     "Kunci PC",     "BTN:LOCK",       "lock", bahaya = true)
     ),
     "BROWSER" to listOf(
-        // --- Tab ---
-        Makro("Tab Baru (Ctrl+T)",     "BTN:TABBARU"),
-        Makro("Tutup Tab (Ctrl+W)",    "BTN:TUTUPTAB"),
-        Makro("Buka Lagi Tab",         "BTN:BUKALAGI"),   // Undo close
-        Makro("Tab Berikutnya",        "BTN:TABLANJUT"),
-        Makro("Tab Sebelumnya",        "BTN:TABSEBELUM"),
-        // --- Navigasi ---
-        Makro("Reload (F5)",           "BTN:RELOAD"),
-        Makro("Mundur",                "BTN:MUNDUR"),
-        Makro("Maju",                  "BTN:MAJU"),
-        // --- Utilitas ---
-        Makro("Cari di Halaman",       "BTN:CARI"),
-        Makro("Kolom Alamat",          "BTN:ALAMAT"),
-        Makro("Bookmark (Ctrl+D)",     "BTN:BOOKMARK"),
-        Makro("Riwayat (Ctrl+H)",      "BTN:RIWAYAT"),
-        Makro("Unduhan (Ctrl+J)",      "BTN:UNDUHAN"),
-        Makro("Incognito",             "BTN:INCOGNITO"),
-        Makro("DevTools",              "BTN:DEVTOOLS"),
-        // --- Umum ---
-        Makro("Simpan (Ctrl+S)",       "BTN:SIMPAN"),
-        Makro("Kunci PC",              "BTN:LOCK")
+        Makro("Tab",      "Tab Baru",       "BTN:TABBARU",    "tabbaru"),
+        Makro("Tab",      "Tutup Tab",      "BTN:TUTUPTAB",   "tutuptab"),
+        Makro("Tab",      "Buka Lagi",      "BTN:BUKALAGI",   "bukalagi"),
+        Makro("Tab",      "Tab Berikutnya", "BTN:TABLANJUT",  "tablanjut"),
+        Makro("Tab",      "Tab Sebelumnya", "BTN:TABSEBELUM", "tabsebelum"),
+        Makro("Navigasi", "Muat Ulang",     "BTN:RELOAD",     "reload"),
+        Makro("Navigasi", "Mundur",         "BTN:MUNDUR",     "mundur"),
+        Makro("Navigasi", "Maju",           "BTN:MAJU",       "maju"),
+        Makro("Utilitas", "Cari di Halaman","BTN:CARI",       "cari"),
+        Makro("Utilitas", "Kolom Alamat",   "BTN:ALAMAT",     "alamat"),
+        Makro("Utilitas", "Markah",         "BTN:BOOKMARK",   "bookmark"),
+        Makro("Utilitas", "Riwayat",        "BTN:RIWAYAT",    "riwayat"),
+        Makro("Utilitas", "Unduhan",        "BTN:UNDUHAN",    "unduhan"),
+        Makro("Utilitas", "Jendela Privat", "BTN:INCOGNITO",  "incognito"),
+        Makro("Utilitas", "DevTools",       "BTN:DEVTOOLS",   "devtools"),
+        Makro("Umum",     "Kunci PC",       "BTN:LOCK",       "lock", bahaya = true)
     )
 )
 
@@ -123,11 +148,14 @@ val PROFIL_MAKRO: Map<String, List<Makro>> = mapOf(
 class MainActivity : Activity() {
 
     // --- Elemen UI ---
-    private lateinit var inputIp: EditText
-    private lateinit var tombolHubungkan: Button
+    private lateinit var titikStatus: View
     private lateinit var teksStatus: TextView
     private lateinit var teksProfil: TextView
+    private lateinit var tombolMenu: ImageButton
     private lateinit var gridMakro: GridLayout
+
+    // --- Penyimpanan preferensi (sambung otomatis / IP manual) ---
+    private lateinit var prefs: SharedPreferences
 
     // --- Multicast lock untuk temuan UDP ---
     // MulticastLock WAJIB: banyak router membuang paket broadcast/multicast
@@ -153,8 +181,39 @@ class MainActivity : Activity() {
     // readLine() memblokir selamanya TANPA exception. Tanpa patokan waktu ini
     // aplikasi akan buta selamanya terhadap koneksi yang sudah mati.
     @Volatile private var terakhirBalasan = 0L
+    // Nomor generasi PENCARIAN (berbeda dari generasi koneksi).
+    // Thread pencarian berhenti otomatis bila nomornya berubah, sehingga
+    // "Cari ulang sekarang" tidak membuat dua thread pencarian berjalan
+    // bersamaan (yang lama masih berputar di while (!terhubung)).
+    @Volatile private var generasiPencarian = 0
     private var profilSekarang = "DEFAULT"
     private var ipTersimpan = ""          // IP hasil temuan otomatis
+
+    // --- SLIDER VOLUME (satu baris penuh di kelompok "Umum") ---
+    // Disimpan sebagai referensi lemah-nullable karena barisnya dibuat ulang
+    // tiap kali grid disusun mengikuti profil baru. Bila null, perubahan
+    // volume dari PC cukup dicatat ke variabel di bawah dan diterapkan saat
+    // barisnya dibuat berikutnya.
+    private var sliderVolume: SeekBar? = null
+    private var labelVolume: TextView? = null
+    // Volume PC yang diketahui terakhir (0-100), atau -1 bila belum pernah
+    // menerima apa pun. Nilai awal ini dipakai supaya slider tidak lompat
+    // ke posisi 0% saat barisnya baru dibuat.
+    @Volatile private var volumeTerkini = -1
+    // PENJAGA ANTI-UMPAN-BALIK: saat slider digeser pengguna, nilai dikirim
+    // ke PC. PC lalu mendorong balik nilai yang sama (hasil polling volume).
+    // Tanpa penanda ini, penerimaan dorongan itu akan mengubah progress,
+    // memicu onProgressChanged, dan mengirim VOL: lagi -- terjadilah loop
+    // saling memantul yang membanjiri ESP. Cukup satu flag untuk memutusnya.
+    @Volatile private var sedangSetVolume = false
+    // Nilai terakhir yang benar-benar dikirim pengguna. Dipakai agar geseran
+    // ke posisi yang SAMA dengan nilai PC tidak mengirim ulang perintah yang
+    // tidak perlu (dan tidak memicu pantulan).
+    private var volumeTerkirim = -1
+    // Waktu (elapsedRealtime) saat terakhir VOL: benar-benar dikirim. Dasar
+    // throttle: geser cepat memicu onProgressChanged puluhan kali per detik,
+    // dan tanpa jeda tiap panggilan akan membangun satu thread baru.
+    private var waktuKirimVolume = 0L
 
     private lateinit var cm: ConnectivityManager
     val uiHandler = Handler(Looper.getMainLooper())
@@ -171,6 +230,29 @@ class MainActivity : Activity() {
         // dianggap mati. Memberi toleransi agar tidak salah deteksi saat
         // jaringan sedang sibuk.
         private const val BATAS_SEPI_MS = 12000L
+
+        // --- Tombol menu limpahan ⋮ ---
+        private const val MENU_OTOMATIS = 1
+        private const val MENU_CARI     = 2
+        private const val MENU_IP       = 3
+        private const val MENU_PUTUS    = 4
+
+        private const val KUNCI_OTOMATIS = "sambung_otomatis"
+
+        // Jeda minimum antar kirim "VOL:" selama slider digeser. 90 ms cukup
+        // membuat volume terasa mengalir mengikuti jari, tanpa membanjiri
+        // ESP (yang meneruskan tiap baris ke PC) dengan puluhan perintah tiap
+        // detik. Nilai yang terlewat tidak masalah: nilai berikutnya, dan
+        // terutama nilai akhir saat jari diangkat, akan menyusul.
+        private const val INTERVAL_KIRIM_VOLUME_MS = 90L
+
+        // Nama kelompok tempat slider volume menempel. Harus sama persis
+        // dengan teks kelompok pada PROFIL_MAKRO di atas.
+        private const val KELOMPOK_UMUM = "Umum"
+
+        // Opasitas tombol saat ESP belum tersambung. Masih cukup terlihat
+        // agar jelas ini tombol, tapi cukup redup agar tidak disangka aktif.
+        private const val REDUP_GRID = 0.35f
     }
 
     // ============================================================
@@ -180,11 +262,13 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        inputIp = findViewById(R.id.inputIp)
-        tombolHubungkan = findViewById(R.id.tombolHubungkan)
-        teksStatus = findViewById(R.id.teksStatus)
-        teksProfil = findViewById(R.id.teksProfil)
-        gridMakro = findViewById(R.id.gridMakro)
+        titikStatus = findViewById(R.id.titik_status)
+        teksStatus = findViewById(R.id.teks_status)
+        teksProfil = findViewById(R.id.teks_profil)
+        tombolMenu = findViewById(R.id.tombol_menu)
+        gridMakro  = findViewById(R.id.grid_makro)
+
+        prefs = getSharedPreferences("halodeck", Context.MODE_PRIVATE)
 
         cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
@@ -201,21 +285,19 @@ class MainActivity : Activity() {
         } catch (e: Exception) {
             // Izin CHANGE_WIFI_MULTICAST_STATE tidak ada -> temuan UDP
             // tetap dicoba, hanya peluangnya lebih kecil
-            Log.w("HaloDeck", "MulticastLock tidak bisa dipegang: ${e.message}")
+            Log.w(TAG, "MulticastLock tidak bisa dipegang: ${e.message}")
         }
 
         bangunGridMakro(profilSekarang)
 
-        // --- MULAI PENCARIAN OTOMATIS saat aplikasi dibuka ---
-        mulaiPencarian()
+        // --- Tombol limpahan ⋮ ---
+        tombolMenu.setOnClickListener { tampilkanMenu(it) }
 
-        // --- Tombol hubungkan/putus (manual override) ---
-        tombolHubungkan.setOnClickListener {
-            if (terhubung) {
-                putusKoneksiManual()
-            } else {
-                mulaiPencarian()
-            }
+        // --- MULAI PENCARIAN OTOMATIS saat aplikasi dibuka ---
+        if (prefs.getBoolean(KUNCI_OTOMATIS, true)) {
+            mulaiPencarian()
+        } else {
+            perbaruiStatus(R.color.teks_redup, getString(R.string.status_terputus))
         }
 
         // --- Pantau jaringan: Wi-Fi siap -> langsung cari & sambung ---
@@ -232,6 +314,107 @@ class MainActivity : Activity() {
     }
 
     // ============================================================
+    // TAMPILAN ATAS: status koneksi, profil aktif, menu ⋮
+    // ============================================================
+    // Satu-satunya tempat mengubah baris status. Warna titik dan teks
+    // selalu diganti berpasangan supaya tidak pernah tidak sinkron.
+    private fun perbaruiStatus(warnaRes: Int, teks: String) {
+        uiHandler.post {
+            titikStatus.background.setTint(getColor(warnaRes))
+            teksStatus.text = teks
+        }
+    }
+
+    private fun tampilkanMenu(panduan: View) {
+        val popup = PopupMenu(this, panduan)
+        val menu = popup.menu
+        val otomatis = prefs.getBoolean(KUNCI_OTOMATIS, true)
+
+        val itemOtomatis = menu.add(0, MENU_OTOMATIS, 0, getString(R.string.menu_sambung_otomatis))
+        itemOtomatis.isCheckable = true
+        itemOtomatis.isChecked = otomatis
+        menu.add(0, MENU_CARI, 0, getString(R.string.menu_cari_ulang))
+        menu.add(0, MENU_IP, 0, getString(R.string.menu_ubah_ip))
+        menu.add(0, MENU_PUTUS, 0, getString(R.string.menu_putuskan))
+
+        // Item yang tidak relevan diredupkan, bukan disembunyikan --
+        // posisinya tetap supaya menu tidak "melompat" antar keadaan.
+        menu.findItem(MENU_PUTUS).isEnabled = terhubung
+        menu.findItem(MENU_IP).isEnabled = !terhubung
+
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                MENU_OTOMATIS -> {
+                    // Menyalakan -> langsung cari; mematikan -> putus.
+                    prefs.edit().putBoolean(KUNCI_OTOMATIS, !otomatis).apply()
+                    if (otomatis) {
+                        putusKoneksiManual()
+                    } else {
+                        mulaiPencarian()
+                    }
+                    true
+                }
+                MENU_CARI -> {
+                    putusKoneksi()
+                    mulaiPencarian()
+                    true
+                }
+                MENU_IP -> {
+                    bukaDialogIp()
+                    true
+                }
+                MENU_PUTUS -> {
+                    putusKoneksiManual()
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
+    }
+
+    // IP manual hanya untuk kasus jarang: jaringan tempat ESP dan HP
+    // dipisah bridge/VPN sehingga siaran broadcast tidak sampai.
+    private fun bukaDialogIp() {
+        val lapik = FrameLayout(this)
+        val masukan = EditText(this).apply {
+            hint = getString(R.string.hint_ip)
+            setText(ipTersimpan)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+        }
+        val lp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(48, 16, 48, 0) }
+        masukan.layoutParams = lp
+        lapik.addView(masukan)
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.judul_dialog_ip))
+            .setMessage(getString(R.string.pesan_dialog_ip))
+            .setView(lapik)
+            .setPositiveButton(getString(R.string.tombol_simpan)) { _, _ ->
+                val ip = masukan.text.toString().trim()
+                if (ip.isNotEmpty()) {
+                    putusKoneksi()
+                    prefs.edit().putBoolean(KUNCI_OTOMATIS, true).apply()
+                    Thread {
+                        if (sambungTcp(ip)) return@Thread
+                        perbaruiStatus(
+                            R.color.aksen_merah,
+                            "Tidak bisa menyambung ke $ip"
+                        )
+                    }.start()
+                } else {
+                    prefs.edit().putBoolean(KUNCI_OTOMATIS, true).apply()
+                    mulaiPencarian()
+                }
+            }
+            .setNegativeButton(getString(R.string.tombol_batal), null)
+            .show()
+    }
+
+    // ============================================================
     // PANTAU JARINGAN (auto-reconnect saat Wi-Fi siap kembali)
     // ============================================================
     private fun pantauJaringan() {
@@ -241,11 +424,9 @@ class MainActivity : Activity() {
                 .build()
             cm.registerNetworkCallback(permintaan, object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    // Jaringan Wi-Fi tersedia -> kalau belum tersambung, cari ESP
-                    if (!terhubung) {
-                        uiHandler.post {
-                            teksStatus.text = "Jaringan siap — mencari ESP8266..."
-                        }
+                    // Jaringan Wi-Fi tersedia -> kalau otomatis aktif dan belum
+                    // tersambung, cari ESP
+                    if (!terhubung && prefs.getBoolean(KUNCI_OTOMATIS, true)) {
                         mulaiPencarian()
                     }
                 }
@@ -253,7 +434,7 @@ class MainActivity : Activity() {
         } catch (e: SecurityException) {
             // Izin ACCESS_NETWORK_STATE tidak ada -> fitur auto-reconnect
             // nonaktif, tapi aplikasi TETAP jalan normal
-            Log.w("HaloDeck", "Pantau jaringan nonaktif: ${e.message}")
+            Log.w(TAG, "Pantau jaringan nonaktif: ${e.message}")
         }
     }
 
@@ -263,21 +444,20 @@ class MainActivity : Activity() {
     private fun mulaiPencarian() {
         if (pencarianAktif || terhubung) return
         pencarianAktif = true
+        perbaruiStatus(R.color.aksen_kuning, getString(R.string.status_mencari))
+        perbaruiRedupGrid()
 
-        // Penting: fungsi ini bisa dipanggil dari thread jaringan
-        // (NetworkCallback), jadi akses View HARUS lewat uiHandler
-        uiHandler.post { tombolHubungkan.text = "Mencari..." }
+        // Catat nomor generasi saat thread ini mulai. Bila nomornya berubah
+        // (mis. pengguna menekan "Cari ulang sekarang"), thread ini berhenti
+        // dan membiarkan thread pencarian yang baru bekerja.
+        val milik = generasiPencarian
 
         Thread {
             try {
-                while (!terhubung) {
+                while (!terhubung && generasiPencarian == milik) {
                     val ip = temukanIpEsp()
+                    if (generasiPencarian != milik) break   // sudah digantikan
                     if (ip != null && !terhubung) {
-                        uiHandler.post {
-                            inputIp.setText(ip)
-                            teksStatus.text = "ESP ditemukan ($ip) — menyambung..."
-                            teksStatus.setTextColor(getColor(R.color.aksen_biru))
-                        }
                         if (sambungTcp(ip)) break
                     }
                     // Coba lagi 2 detik kemudian (terus mencari otomatis)
@@ -287,7 +467,7 @@ class MainActivity : Activity() {
                 // Thread dihentikan, abaikan
             } catch (e: Exception) {
                 // Error tak terduga jangan sampai bikin crash
-                Log.e("HaloDeck", "Gagal saat mencari ESP", e)
+                Log.e(TAG, "Gagal saat mencari ESP", e)
             } finally {
                 pencarianAktif = false
             }
@@ -325,18 +505,9 @@ class MainActivity : Activity() {
                                 // bukan teks di isi paket — jauh lebih andal
                                 // karena IP asli ESP pasti benar.
                                 jawaban = paket.address.hostAddress
-                            } else if (bagian.size == 3 && bagian[1] == "AP") {
-                                // ESP mode setup (belum ada kredensial):
-                                // hotspot menyala, konfigurasi via PORTAL BROWSER
-                                // (tombol atur Wi-Fi di aplikasi sudah dihapus —
-                                //  ESP tidak memancarkan hotspot setelah terkonfigurasi)
-                                uiHandler.post {
-                                    teksStatus.text =
-                                        "ESP mode setup — sambung hotspot HALODECK-SETUP, " +
-                                        "lalu buka http://192.168.4.1"
-                                    teksStatus.setTextColor(getColor(R.color.aksen_biru))
-                                }
                             }
+                            // Bagian "AP" (mode setup): dibiarkan. Portal
+                            // konfigurasi memang lewat browser, bukan aplikasi.
                         }
                         // Bukan balasan HALODECK -> abaikan, dengarkan lagi
                     } catch (_: SocketTimeoutException) {
@@ -354,7 +525,7 @@ class MainActivity : Activity() {
     // KONEKSI TCP (dipakai temuan otomatis maupun manual)
     // ============================================================
     // Gerbang tunggal untuk SEMUA upaya sambung (thread pencarian, reconnect,
-    // maupun tombol manual). Tanpa gembok ini dua thread bisa membuka dua
+    // maupun dialog IP manual). Tanpa gembok ini dua thread bisa membuka dua
     // socket bersamaan; ESP hanya menyimpan SATU client, jadi yang satu
     // menutup yang lain -> pembaca yang terusir mati, reconnect, menutup
     // lagi -> LOOP KONEK-PUTUS tak berujung.
@@ -388,12 +559,9 @@ class MainActivity : Activity() {
             mulaiHeartbeat(generasi)
             try { lama?.close() } catch (_: Exception) {}
 
-            uiHandler.post {
-                teksStatus.text = "Terhubung otomatis ($ip)"
-                teksStatus.setTextColor(getColor(R.color.aksen_hijau))
-                tombolHubungkan.text = "Putuskan"
-                kirimPerintah("STAT")
-            }
+            perbaruiStatus(R.color.aksen_hijau, getString(R.string.status_tersambung))
+            perbaruiRedupGrid()
+            kirimPerintah("STAT")
             return true
         }
     }
@@ -493,11 +661,8 @@ class MainActivity : Activity() {
             terhubung = false
         }
 
-        uiHandler.post {
-            teksStatus.text = "Terputus — mencari ulang otomatis..."
-            teksStatus.setTextColor(getColor(R.color.aksen_merah))
-            tombolHubungkan.text = "Mencari..."
-        }
+        perbaruiStatus(R.color.aksen_merah, getString(R.string.status_terputus))
+        perbaruiRedupGrid()
 
         // Coba sambung lagi ke IP terakhir dulu (cepat). Gembok
         // sedangReconnect menjamin hanya SATU thread reconnect berjalan.
@@ -522,9 +687,7 @@ class MainActivity : Activity() {
 
     private fun putusKoneksiManual() {
         putusKoneksi()
-        uiHandler.post {
-            teksStatus.text = "Diputus manual (tekan Hubungkan utk cari lagi)"
-        }
+        perbaruiStatus(R.color.teks_redup, getString(R.string.status_manual))
     }
 
     private fun putusKoneksi() {
@@ -534,14 +697,26 @@ class MainActivity : Activity() {
         // Naikkan generasi -> pembaca lama tahu socketnya sudah basi dan
         // tidak akan memicu auto-reconnect (menutup loop konek-putus)
         generasi += 1
+        // Naikkan juga generasi pencarian -> thread pencarian yang sedang
+        // berputar berhenti, sehingga pencarian berikutnya tidak dobel
+        generasiPencarian += 1
         try { socket?.close() } catch (_: Exception) {}
         socket = null
         penulis = null
-        // Akses View dibungkus uiHandler agar aman dipanggil dari thread mana pun
+        perbaruiRedupGrid()
+    }
+
+    // Saat tidak tersambung, semua tombol diredupkan agar jelas tombol belum
+    // aktif. TETAP bisa disentuh — pengguna masih boleh membuka menu ⋮.
+    // Catatan: yang diredupkan adalah TIAP TOMBOL, bukan wadah grid. Mengatur
+    // alpha pada wadah tidak berpengaruh pada anak yang sudah dibuat, sehingga
+    // pernah terjadi grid tetap redup walau sudah tersambung.
+    private fun perbaruiRedupGrid() {
+        val alpha = if (terhubung) 1f else REDUP_GRID
         uiHandler.post {
-            try {
-                tombolHubungkan.text = getString(R.string.tombol_hubungkan)
-            } catch (_: Exception) {}
+            for (i in 0 until gridMakro.childCount) {
+                gridMakro.getChildAt(i).alpha = alpha
+            }
         }
     }
 
@@ -554,8 +729,45 @@ class MainActivity : Activity() {
                 val profil = baris.substring(5).uppercase()
                 uiHandler.post { terapkanProfil(profil) }
             }
+            baris.startsWith("VOL:") -> {
+                // Volume PC yang diubah lewat keyboard/tombol fisik. Diproses
+                // di thread pembaca, lalu diteruskan ke UI thread karena
+                // sentuhan View (progress slider) hanya sah di thread UI.
+                val nilai = baris.substring(4).toIntOrNull()
+                if (nilai != null) {
+                    uiHandler.post { terapkanVolumeDariPC(nilai) }
+                }
+            }
             // Balasan lain (PONG, ACK, OK, ERR) — cukup abaikan
         }
+    }
+
+    // Terima volume PC (hasil polling bridge) lalu gerakkan slider agar
+    // posisinya mencerminkan keadaan PC yang sebenarnya.
+    //
+    // KUNCI ANTI-UMPAN-BALIK: setProgress() memanggil onProgressChanged
+    // dengan fromUser = false. Pada bacaan kami di listener, nilai false
+    // itu sudah cukup untuk membatalkan pengiriman balik. Flag
+    // sedangSetVolume ditambahkan sebagai jaring pengaman kedua, karena
+    // beberapa perangkat MIUI dilaporkan meneruskan fromUser = true pada
+    // perubahan programatis -- dan jika itu terjadi, PC dan HP akan saling
+    // memantul volume tanpa henti.
+    private fun terapkanVolumeDariPC(persen: Int) {
+        val nilai = persen.coerceIn(0, 100)
+        volumeTerkini = nilai
+
+        val slider = sliderVolume ?: return   // Baris belum dibuat -> cukup catat
+        val label = labelVolume ?: return
+
+        sedangSetVolume = true
+        if (slider.progress != nilai) slider.progress = nilai
+        label.text = "$nilai%"
+        sedangSetVolume = false
+
+        // Nilai tersinkron = nilai PC. Dicatat sebagai "terkirim" juga, supaya
+        // bila pengguna menggeser ke posisi yang persis sama dengan volume PC
+        // sekarang, tidak ada perintah VOL: yang dikirim sia-sia.
+        volumeTerkirim = nilai
     }
 
     // ============================================================
@@ -563,34 +775,190 @@ class MainActivity : Activity() {
     // ============================================================
     private fun terapkanProfil(profil: String) {
         profilSekarang = profil
-        teksProfil.text = "Profil: $profil"
+        teksProfil.text = profil
         bangunGridMakro(profil)
     }
 
+    // Susun ulang grid: judul kelompok di atas, lalu tombol 3 kolom.
     private fun bangunGridMakro(profil: String) {
         gridMakro.removeAllViews()
+        // Referensi slider lama tidak berlaku lagi setelah removeAllViews()
+        sliderVolume = null
+        labelVolume = null
         val daftarMakro = PROFIL_MAKRO[profil] ?: PROFIL_MAKRO.getValue("DEFAULT")
 
+        var kelompokTerakhir = ""
         for (makro in daftarMakro) {
-            val tombol = Button(this).apply {
-                text = makro.label
-                textSize = 15f
-                isAllCaps = false
-                setBackgroundColor(getColor(R.color.aksen_biru))
-                setTextColor(getColor(R.color.latar_gelap))
-                val lp = GridLayout.LayoutParams().apply {
-                    width = 0
-                    height = GridLayout.LayoutParams.WRAP_CONTENT
-                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                    setMargins(8, 8, 8, 8)
-                    gravity = Gravity.CENTER
+            if (makro.kelompok != kelompokTerakhir) {
+                kelompokTerakhir = makro.kelompok
+                gridMakro.addView(buatJudulKelompok(makro.kelompok))
+                // Slider volume menempel di bawah judul "Umum". Volume PC
+                // selalu relevan di setiap aplikasi, jadi cukup satu baris
+                // di sini daripada diulang di tiap kelompok lain.
+                if (makro.kelompok == KELOMPOK_UMUM) {
+                    gridMakro.addView(buatBarisVolume())
                 }
-                layoutParams = lp
-                setPadding(8, 24, 8, 24)
-                setOnClickListener { kirimPerintah(makro.perintah) }
             }
-            gridMakro.addView(tombol)
+            gridMakro.addView(buatTombolMakro(makro))
         }
+
+        // Pastikan opasitas semua tombol mengikuti keadaan koneksi terkini
+        perbaruiRedupGrid()
+    }
+
+    // Bangun satu baris slider volume yang membentang ke-3 kolom grid.
+    // Nilai awalnya volumeTerkini (hasil dorongan PC terakhir), sehingga
+    // slider tidak pernah "berbohong" tentang volume PC yang sebenarnya.
+    private fun buatBarisVolume(): View {
+        val tampilan = layoutInflater.inflate(
+            R.layout.baris_volume, gridMakro, false
+        )
+        val slider = tampilan.findViewById<SeekBar>(R.id.slider_volume)
+        val label = tampilan.findViewById<TextView>(R.id.teks_volume)
+        sliderVolume = slider
+        labelVolume = label
+
+        // Pasang nilai yang sudah diketahui TANPA memicu pengiriman.
+        // setValue() memang memanggil onProgressChanged, jadi flag penjaga
+        // dinyalakan dulu agar nilai hasil sinkronisasi tidak ikut terkirim
+        // balik ke PC (itulah sumber umpan balik tak berujung).
+        sedangSetVolume = true
+        if (volumeTerkini >= 0) {
+            slider.progress = volumeTerkini
+            label.text = "$volumeTerkini%"
+        }
+        sedangSetVolume = false
+
+        slider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
+                label.text = "$progress%"
+                // fromUser = false berarti perubahan datang dari sinkronisasi
+                // PC, bukan dari jari pengguna. Jangan dikirim ulang.
+                if (!fromUser || sedangSetVolume) return
+                if (progress == volumeTerkirim) return   // Nilai sama -> tak perlu kirim
+
+                // THROTTLE: menggeser cepat memicu callback ini puluhan kali
+                // tiap detik, dan tiap kali kirimVolume() membangun satu thread
+                // serta menulis satu baris ke ESP. Tanpa jeda ini jalur serial
+                // bisa tersumbat. Nilai yang terlewat tidak masalah karena nilai
+                // berikutnya, dan terutama nilai akhir saat jari diangkat
+                // (lihat onStopTrackingTouch), akan menyusul juga.
+                val sekarang = SystemClock.elapsedRealtime()
+                if (sekarang - waktuKirimVolume < INTERVAL_KIRIM_VOLUME_MS) return
+                waktuKirimVolume = sekarang
+
+                volumeTerkirim = progress
+                kirimVolume(progress)
+            }
+
+            override fun onStartTrackingTouch(sb: SeekBar) {}
+
+            override fun onStopTrackingTouch(sb: SeekBar) {
+                // Nilai AKHIR saat jari diangkat: dikirim tanpa syarat, tanpa
+                // throttle. Ini nilai yang benar-benar diinginkan pengguna, dan
+                // juga menutup kemungkinan nilai terakhirnya sempat terlewat
+                // oleh throttle di atas.
+                waktuKirimVolume = SystemClock.elapsedRealtime()
+                if (sb.progress != volumeTerkirim) {
+                    volumeTerkirim = sb.progress
+                    kirimVolume(sb.progress)
+                }
+            }
+        })
+
+        tampilan.layoutParams = GridLayout.LayoutParams().apply {
+            width = 0
+            height = GridLayout.LayoutParams.WRAP_CONTENT
+            // Bentang 3 kolom + bobot 1f, sama seperti judul kelompok.
+            columnSpec = GridLayout.spec(0, 3, 1f)
+            setMargins(4, 2, 4, 4)
+        }
+        tampilan.alpha = if (terhubung) 1f else REDUP_GRID
+        return tampilan
+    }
+
+    private fun buatJudulKelompok(teks: String): TextView {
+        return TextView(this).apply {
+            text = teks
+            textSize = 12f
+            setTextColor(getColor(R.color.teks_redup))
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(4, 20, 4, 8)
+            layoutParams = GridLayout.LayoutParams().apply {
+                width = 0
+                height = GridLayout.LayoutParams.WRAP_CONTENT
+                // Bobot 1f WAJIB: tanpa bobot, width = 0 membuat teks judul
+                // menyusut jadi nol lebar sehingga tidak pernah terlihat.
+                // Dibentangkan ke 3 kolom agar menempati seluruh baris.
+                columnSpec = GridLayout.spec(0, 3, 1f)
+            }
+        }
+    }
+
+    private fun buatTombolMakro(makro: Makro): View {
+        val tampilan = layoutInflater.inflate(
+            R.layout.item_makro, gridMakro, false
+        )
+
+        val ikon = tampilan.findViewById<ImageView>(R.id.ikon_makro)
+        val label = tampilan.findViewById<TextView>(R.id.label_makro)
+        label.text = makro.label
+
+        // Nama berkas ikon -> resource drawable, tanpa daftar when panjang
+        val idRes = resources.getIdentifier(
+            "ic_m_${makro.ikon}", "drawable", packageName
+        )
+        if (idRes != 0) {
+            ikon.setImageResource(idRes)
+            // Warna ikon disamakan dengan label; saat bahaya, dipakai merah
+            ikon.setColorFilter(
+                getColor(if (makro.bahaya) R.color.aksen_merah else R.color.warna_ikon),
+                PorterDuff.Mode.SRC_IN
+            )
+        }
+
+        // Tombol berbahaya memakai latar ripple merah agar menonjol
+        if (makro.bahaya) {
+            tampilan.setBackgroundResource(R.drawable.ripple_makro_bahaya)
+        }
+
+        tampilan.layoutParams = GridLayout.LayoutParams().apply {
+            width = 0
+            height = GridLayout.LayoutParams.WRAP_CONTENT
+            // Kolom berbobot 1f -> ketiga kolom selalu sama lebar
+            columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1, 1f)
+            setMargins(5, 5, 5, 5)
+        }
+
+        // Tombol baru dibuat sesuai keadaan koneksi saat ini. Alpha final
+        // tetap diselaraskan lagi oleh perbaruiRedupGrid() setelah grid jadi.
+        tampilan.alpha = if (terhubung) 1f else REDUP_GRID
+        tampilan.setOnClickListener { kirimPerintah(makro.perintah) }
+        return tampilan
+    }
+
+    // Kirim volume ke ESP: "VOL:<0-100>". Berbeda dari kirimPerintah(),
+    // fungsi ini SENYAP saat tersambung putus -- menggeser slider bisa
+    // memanggilnya puluhan kali per detik, sehingga Toast akan menumpuk
+    // dan menutupi layar. Kegagalan diam-diam cukup: pengguna akan melihat
+    // sendiri slider tidak berpengaruh, dan auto-reconnect menyusul.
+    private fun kirimVolume(persen: Int) {
+        if (!terhubung || penulis == null) return
+        val nilai = persen.coerceIn(0, 100)
+        val teks = "VOL:$nilai"
+        val milik = generasi
+        Thread {
+            try {
+                penulis?.write(teks + "\n")
+                penulis?.flush()
+            } catch (e: Exception) {
+                // Sama seperti kirimPerintah(): gagal menulis berarti koneksi
+                // sudah mati tanpa terdeteksi. Nyatakan mati agar reconnect
+                // berjalan tanpa perlu sentuhan pengguna.
+                Log.d(TAG, "Gagal kirim '$teks': ${e.message}")
+                picuReconnect(milik)
+            }
+        }.start()
     }
 
     // ============================================================
