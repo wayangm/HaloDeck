@@ -19,28 +19,7 @@ import queue
 import tkinter as tk
 from tkinter import ttk
 
-# ---------- GRUP TOMBOL MAKRO (kunci = kode aksi di aksi.py) ----------
-GRUP_AKSI = [
-    ("Umum", [
-        ("LOCK", "Kunci PC"), ("MUTE", "Mute"),
-        ("BROWSER", "Browser"), ("TASKMGR", "Task Manager"),
-    ]),
-    ("Produktivitas", [
-        ("SIMPAN", "Simpan"), ("BARU", "Baru"), ("UNDO", "Undo"),
-        ("REDO", "Redo"), ("TABBARU", "Tab Baru"), ("TUTUPTAB", "Tutup Tab"),
-        ("BUKALAGI", "Buka Lagi"), ("RELOAD", "Reload"), ("CARI", "Cari"),
-    ]),
-    ("Photoshop", [
-        ("PS_ZOOMIN", "Zoom +"), ("PS_ZOOMOUT", "Zoom -"), ("PS_FIT", "Fit Layar"),
-        ("PS_LAYER", "Layer Baru"), ("PS_FLATTEN", "Flatten"),
-    ]),
-    ("Premiere Pro", [
-        ("PR_UNDO", "Undo"), ("PR_CUT", "Cut"), ("PR_IN", "Mark In"),
-        ("PR_OUT", "Mark Out"), ("PR_EXPORT", "Export Frame"),
-    ]),
-]
-
-JENDELA_W, JENDELA_H = 720, 600
+JENDELA_W, JENDELA_H = 680, 500
 BARIS_LOG_MAKS = 200
 POLL_UI_MS = 400
 
@@ -49,15 +28,16 @@ class JendelaKonektor:
     """Jendela utama HaloDeck. Dibuat lewat siapkan() di connector_app."""
 
     def __init__(self, app, state, catat, berkas_log,
-                 auto_start_aktif, set_auto_start):
-        from aksi import PEMETA_AKSI          # impor di sini: hindari siklus
+                 auto_start_aktif, set_auto_start,
+                 sembunyi_tray_aktif, set_sembunyi_tray):
         self.app = app                        # objek KonektorTray
         self.state = state                    # dict status bersama
         self.catat = catat
         self.berkas_log = berkas_log
         self.auto_start_aktif = auto_start_aktif
         self.set_auto_start = set_auto_start
-        self.pemeta_aksi = PEMETA_AKSI
+        self.sembunyi_tray_aktif = sembunyi_tray_aktif
+        self.set_sembunyi_tray = set_sembunyi_tray
         self.antrean = queue.Queue()          # perintah dari thread lain
         self._ukuran_log_terakhir = 0
         self._jumlah_baris_log = 0
@@ -70,9 +50,10 @@ class JendelaKonektor:
     # ----------------------------------------------------------
     def _bangun_jendela(self):
         self.win = tk.Tk()
+        self.win.withdraw()                   # Awalnya tersembunyi; tampilkan() jika diminta
         self.win.title("HaloDeck Konektor")
         self.win.geometry(f"{JENDELA_W}x{JENDELA_H}")
-        self.win.minsize(640, 520)
+        self.win.minsize(580, 380)
         self.win.protocol("WM_DELETE_WINDOW", self.sembunyikan)
         try:
             ttk.Style().theme_use("vista")
@@ -100,26 +81,9 @@ class JendelaKonektor:
                            pady=(6, 0))
         kartu.columnconfigure(1, weight=1)
 
-        # --- 2. Tombol makro (klik = langsung dieksekusi di PC) ---
-        makro = ttk.LabelFrame(pokok, text=" Tombol Makro (klik = jalankan aksi di PC) ",
-                               padding=10)
-        makro.pack(fill=tk.X, pady=(10, 0))
-        for i, (nama_grup, daftar) in enumerate(GRUP_AKSI):
-            bingkai = ttk.LabelFrame(makro, text=f" {nama_grup} ", padding=6)
-            bingkai.grid(row=i // 2, column=i % 2, sticky="nsew",
-                         padx=(0, 6), pady=(0, 6))
-            makro.columnconfigure(0, weight=1)
-            makro.columnconfigure(1, weight=1)
-            for j, (kode, label) in enumerate(daftar):
-                if kode not in self.pemeta_aksi:
-                    continue                      # aksi belum ada -> lewati
-                ttk.Button(bingkai, text=label, width=14,
-                           command=lambda k=kode: self._jalankan_aksi(k)
-                           ).grid(row=j // 3, column=j % 3, padx=2, pady=2)
-
-        # --- 3. Pembaruan & pengaturan ---
+        # --- 2. Pembaruan & pengaturan ---
         perbarui = ttk.LabelFrame(pokok, text=" Pembaruan & Pengaturan ", padding=10)
-        perbarui.pack(fill=tk.X, pady=(0, 10))
+        perbarui.pack(fill=tk.X, pady=(10, 10))
         self.lbl_versi = ttk.Label(perbarui, text="Versi ...")
         self.lbl_versi.grid(row=0, column=0, sticky="w")
         self.btn_cek = ttk.Button(perbarui, text="Periksa Pembaruan",
@@ -129,15 +93,31 @@ class JendelaKonektor:
                                      command=self._pasang_update,
                                      state=tk.DISABLED)
         self.btn_pasang.grid(row=0, column=2, padx=6)
+
+        # Opsi auto-start bersama Windows & sembunyi di tray
+        bingkai_opsi = ttk.Frame(perbarui)
+        bingkai_opsi.grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
         self.cek_autostart = tk.BooleanVar(
             value=bool(self.auto_start_aktif()))
-        ttk.Checkbutton(perbarui, text="Mulai otomatis bersama Windows",
-                        variable=self.cek_autostart,
-                        command=self._toggle_autostart).grid(
-            row=1, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        self.chk_autostart = ttk.Checkbutton(
+            bingkai_opsi, text="Mulai otomatis bersama Windows",
+            variable=self.cek_autostart,
+            command=self._toggle_autostart)
+        self.chk_autostart.pack(anchor="w")
+
+        self.cek_sembunyi = tk.BooleanVar(
+            value=bool(self.sembunyi_tray_aktif()))
+        self.chk_sembunyi = ttk.Checkbutton(
+            bingkai_opsi, text="Sembunyi di tray saat start otomatis",
+            variable=self.cek_sembunyi,
+            command=self._toggle_sembunyi)
+        self.chk_sembunyi.pack(anchor="w", padx=(20, 0), pady=(4, 0))
+
+        self._perbarui_status_opsi()
         perbarui.columnconfigure(0, weight=1)
 
-        # --- 4. Log langsung ---
+        # --- 3. Log langsung ---
         log = ttk.LabelFrame(pokok, text=" Log ", padding=6)
         log.pack(fill=tk.BOTH, expand=True)
         self.txt_log = tk.Text(log, height=8, wrap=tk.WORD, state=tk.DISABLED,
@@ -227,45 +207,50 @@ class JendelaKonektor:
         from versi import VERSI
         s = self.state
         hijau = bool(s.get("tersambung"))
-        self.kanvas_dot.itemconfigure(self.dot,
-                                      fill="#2ecc71" if hijau else "#e74c3c")
-        self.lbl_status.configure(
-            text=f"TERSAMBUNG — {s.get('jalur', '-')}" if hijau
-                 else "Mencari ESP8266...")
-        self.lbl_profil.configure(text=f"Profil: {s.get('profil', '-')}")
-        self.lbl_aksi.configure(text=f"Aksi: {s.get('jumlah_aksi', 0)}")
         jalur = s.get("jalur", "-")
-        self.lbl_port.configure(
-            text=f"Jalur {jalur}  ·  "
-                 f"Log: {os.path.basename(self.berkas_log)}")
+        profil = s.get("profil", "-")
+        aksi = s.get("jumlah_aksi", 0)
+
+        teks_status = f"TERSAMBUNG — {jalur}" if hijau else "Mencari ESP8266..."
+        teks_profil = f"Profil: {profil}"
+        teks_aksi = f"Aksi: {aksi}"
+        teks_port = f"Jalur {jalur}  ·  Log: {os.path.basename(self.berkas_log)}"
 
         u = self.app.updater.status
         if u.get("ada"):
-            self.lbl_versi.configure(
-                text=f"Versi {VERSI}  ->  {u['versi']} TERSEDIA",
-                foreground="#2ecc71")
-            self.btn_pasang.configure(state=tk.NORMAL,
-                                      text=f"Pasang {u['versi']}")
+            teks_versi = f"Versi {VERSI}  ->  {u['versi']} TERSEDIA"
+            fg_versi = "#2ecc71"
+            teks_pasang = f"Pasang {u['versi']}"
+            state_pasang = tk.NORMAL if not u.get("sibuk") else tk.DISABLED
         else:
-            self.lbl_versi.configure(text=f"Versi {VERSI} — {u.get('pesan', '')}",
-                                     foreground="#666")
-            self.btn_pasang.configure(state=tk.DISABLED, text="Pasang Pembaruan")
-        self.btn_cek.configure(state=tk.DISABLED if u.get("sibuk") else tk.NORMAL)
+            teks_versi = f"Versi {VERSI} — {u.get('pesan', '')}"
+            fg_versi = "#666"
+            teks_pasang = "Pasang Pembaruan"
+            state_pasang = tk.DISABLED
+
+        state_cek = tk.DISABLED if u.get("sibuk") else tk.NORMAL
+
+        state_sekarang = (hijau, teks_status, teks_profil, teks_aksi, teks_port,
+                          teks_versi, fg_versi, teks_pasang, state_pasang, state_cek)
+
+        # Hindari configure widget bila tidak ada perubahan agar efek hover mouse stabil
+        if getattr(self, "_state_cache", None) == state_sekarang:
+            return
+        self._state_cache = state_sekarang
+
+        warna_dot = "#2ecc71" if hijau else "#e74c3c"
+        self.kanvas_dot.itemconfigure(self.dot, fill=warna_dot)
+        self.lbl_status.configure(text=teks_status)
+        self.lbl_profil.configure(text=teks_profil)
+        self.lbl_aksi.configure(text=teks_aksi)
+        self.lbl_port.configure(text=teks_port)
+        self.lbl_versi.configure(text=teks_versi, foreground=fg_versi)
+        self.btn_pasang.configure(text=teks_pasang, state=state_pasang)
+        self.btn_cek.configure(state=state_cek)
 
     # ----------------------------------------------------------
-    # AKSI TOMBOL
+    # PENGATURAN & AKSI
     # ----------------------------------------------------------
-    def _jalankan_aksi(self, kode):
-        from aksi import eksekusi_perintah
-        sukses = eksekusi_perintah(f"BTN:{kode}")
-        self.catat(f"Aksi dari jendela UI: {kode} "
-                   f"({'OK' if sukses else 'GAGAL'})")
-        try:
-            if sukses:
-                self.state["jumlah_aksi"] += 1
-        except Exception:
-            pass
-
     def _cek_update(self):
         self.catat("Pemeriksaan pembaruan diminta dari jendela UI.")
         self.app.updater.cek_async()
@@ -290,6 +275,17 @@ class JendelaKonektor:
     def _toggle_autostart(self):
         self.set_auto_start(bool(self.cek_autostart.get()))
         self.cek_autostart.set(bool(self.auto_start_aktif()))
+        self._perbarui_status_opsi()
+
+    def _toggle_sembunyi(self):
+        self.set_sembunyi_tray(bool(self.cek_sembunyi.get()))
+        self.cek_sembunyi.set(bool(self.sembunyi_tray_aktif()))
+
+    def _perbarui_status_opsi(self):
+        if self.cek_autostart.get():
+            self.chk_sembunyi.configure(state=tk.NORMAL)
+        else:
+            self.chk_sembunyi.configure(state=tk.DISABLED)
 
     def _ulang_koneksi(self):
         self.catat("Jalankan ulang koneksi diminta dari jendela UI.")
@@ -360,11 +356,14 @@ class JendelaKonektor:
         self.txt_log.configure(state=tk.DISABLED)
 
 
-def siapkan(app, state, catat, berkas_log, auto_start_aktif, set_auto_start):
+def siapkan(app, state, catat, berkas_log,
+            auto_start_aktif, set_auto_start,
+            sembunyi_tray_aktif, set_sembunyi_tray):
     """Buat jendela; kembalikan None bila tkinter tidak tersedia."""
     try:
         return JendelaKonektor(app, state, catat, berkas_log,
-                               auto_start_aktif, set_auto_start)
+                               auto_start_aktif, set_auto_start,
+                               sembunyi_tray_aktif, set_sembunyi_tray)
     except Exception as galat:
         catat(f"Jendela UI tidak tersedia ({galat}) -> mode tray saja.")
         return None

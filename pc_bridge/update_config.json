@@ -2,5 +2,6 @@
   "repo": "wayangm/HaloDeck",
   "prefiks_aset": "halodeck-win",
   "cek_otomatis": true,
-  "pasang_otomatis": false
+  "pasang_otomatis": false,
+  "sembunyi_tray_autostart": true
 }

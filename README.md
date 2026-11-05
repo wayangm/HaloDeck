@@ -123,12 +123,9 @@ dengan **jendela UI** yang bisa dibuka kapan saja.
   menyala sendiri saat login, mati sendiri saat logout.
 - **Tray icon:** titik **hijau** = ESP tersambung, **merah** = masih mencari.
 - **Jendela UI** (klik ganda ikon tray, atau menu *Buka Jendela*):
-  - kartu **status** — koneksi ESP, profil aktif, jumlah aksi, port
-  - **tombol makro** — klik langsung dieksekusi di PC (kunci PC, mute,
-    undo/redo, makro Photoshop & Premiere); berguna saat HP sedang tidak
-    dipegang
-  - **pembaruan** — versi saat ini, *Periksa Pembaruan*, *Pasang Pembaruan*
-  - pengaturan **mulai otomatis** & **jalankan ulang koneksi**
+  - kartu **status** — koneksi ESP, profil aktif, jumlah aksi, jalur port/Wi-Fi
+  - **pembaruan & pengaturan** — versi saat ini, *Periksa/Pasang Pembaruan*,
+    opsi *Mulai otomatis bersama Windows*, dan *Sembunyi di tray saat start otomatis*
   - **log langsung** — isi `konektor.log` tampil & mengalir sendiri
   - menutup jendela hanya **menyembunyikannya** ke tray; benar-benar keluar
     lewat tombol *Keluar* atau menu tray
@@ -137,6 +134,7 @@ dengan **jendela UI** yang bisa dibuka kapan saja.
   - *Buka Jendela* — buka UI (klik ganda tray = hal yang sama)
   - *Jalankan Ulang Koneksi* — sambung ulang ke ESP
   - *Mulai Otomatis Bersama Windows* — toggle on/off
+  - *Sembunyi di Tray saat Mulai Otomatis* — toggle on/off saat auto-start
   - *Buka Berkas Log* — lihat riwayat di `pc_bridge/konektor.log`
   - *Unduh Berkas Lain (Firmware & APK)* — buka halaman rilis di peramban
   - *Versi … / Periksa Pembaruan / Pasang Pembaruan* — pembaruan otomatis

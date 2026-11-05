@@ -372,6 +372,9 @@ ArchitecturesAllowed=x64compatible
 ; Instal per-user (tanpa admin) - aplikasi juga meng-update dirinya sendiri
 PrivilegesRequired=lowest
 WizardStyle=modern
+; Tutup otomatis proses latar belakang HaloDeck tanpa dialog Restart Manager
+CloseApplications=no
+RestartApplications=no
 
 [Tasks]
 Name: "desktopicon"; Description: "Buat ikon di desktop"; GroupDescription: "Pintasan tambahan:"; Flags: unchecked
@@ -391,6 +394,31 @@ Filename: "{app}\pythonw.exe"; Parameters: @PARAM@; Description: "Jalankan {#App
 Type: filesandordirs; Name: "{app}\app\_cadangan"
 Type: files; Name: "{app}\app\konektor.log"
 Type: files; Name: "{app}\app\konektor.lock"
+
+[Code]
+// Hentikan proses HaloDeck yang sedang berjalan di latar belakang sebelum pemasangan/penghapusan
+function HentikanHaloDeck(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Exec('powershell.exe',
+       '-WindowStyle Hidden -NoProfile -Command "Get-Process -Name python, pythonw -ErrorAction SilentlyContinue | Where-Object Path -like ''*HaloDeck*'' | Stop-Process -Force"',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(500);
+  Result := True;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  HentikanHaloDeck();
+  Result := '';
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  HentikanHaloDeck();
+  Result := True;
+end;
 """
     isi = isi.replace("@VERSI@", VERSI)
     # @PARAM@ -> """{app}\app\connector_app.py"""  (escaped quote khas Inno;

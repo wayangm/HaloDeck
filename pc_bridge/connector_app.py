@@ -138,14 +138,43 @@ def auto_start_aktif():
         return False
 
 
-def set_auto_start(aktif):
+def sembunyi_tray_aktif():
+    """Periksa apakah opsi sembunyi di tray saat start otomatis aktif."""
+    try:
+        cfg = updater.muat_config()
+        return bool(cfg.get("sembunyi_tray_autostart", True))
+    except Exception:
+        return True
+
+
+def set_sembunyi_tray(aktif):
+    """Simpan preferensi sembunyi di tray dan perbarui entri registry bila aktif."""
+    try:
+        cfg = updater.muat_config()
+        cfg["sembunyi_tray_autostart"] = bool(aktif)
+        updater.simpan_config(cfg)
+        catat(f"Pengaturan sembunyi di tray saat autostart: {'AKTIF' if aktif else 'NONAKTIF'}")
+        if auto_start_aktif():
+            set_auto_start(True, sembunyi_tray=aktif)
+        return True
+    except Exception as galat:
+        catat(f"Gagal simpan pengaturan sembunyi tray: {galat}")
+        return False
+
+
+def set_auto_start(aktif, sembunyi_tray=None):
     try:
         import winreg
         if aktif:
             pythonw = sys.executable.replace("python.exe", "pythonw.exe")
             if not os.path.exists(pythonw):
                 pythonw = sys.executable
-            nilai = f'"{pythonw}" "{os.path.abspath(__file__)}"'
+            if sembunyi_tray is None:
+                sembunyi_tray = sembunyi_tray_aktif()
+            argumen = " --autostart"
+            if sembunyi_tray:
+                argumen += " --sembunyi-tray"
+            nilai = f'"{pythonw}" "{os.path.abspath(__file__)}"{argumen}'
             kunci = winreg.CreateKey(winreg.HKEY_CURRENT_USER, HKCU_RUN)
             winreg.SetValueEx(kunci, NAMA_RUN, 0, winreg.REG_SZ, nilai)
             winreg.CloseKey(kunci)
@@ -171,6 +200,7 @@ def migrasi_nama_startup():
     Aplikasi versi lama terdaftar di Registry dgn nama "WGMediaDECK Konektor".
     Bila itu masih ada, salin nilainya ke nama baru lalu hapus yang lama,
     supaya pengguna TIDAK kehilangan pengaturan auto-start saat pembaruan.
+    Juga menyinkronkan argumen --autostart terbaru bila sudah aktif.
     """
     try:
         import winreg
@@ -182,16 +212,18 @@ def migrasi_nama_startup():
         try:
             nilai_lama, _ = winreg.QueryValueEx(kunci, NAMA_RUN_LAMA)
         except FileNotFoundError:
-            return                      # Tidak ada entri lama -> tidak perlu apa-apa
-        sudah_ada = True
-        try:
-            winreg.QueryValueEx(kunci, NAMA_RUN)
-        except FileNotFoundError:
-            sudah_ada = False
-        if not sudah_ada:
-            winreg.SetValueEx(kunci, NAMA_RUN, 0, winreg.REG_SZ, nilai_lama)
-        winreg.DeleteValue(kunci, NAMA_RUN_LAMA)
-        catat(f"Auto-start Windows: entri '{NAMA_RUN_LAMA}' -> '{NAMA_RUN}'")
+            nilai_lama = None
+        if nilai_lama is not None:
+            winreg.DeleteValue(kunci, NAMA_RUN_LAMA)
+            set_auto_start(True)
+            catat(f"Auto-start Windows: entri '{NAMA_RUN_LAMA}' -> '{NAMA_RUN}'")
+        elif auto_start_aktif():
+            try:
+                val, _ = winreg.QueryValueEx(kunci, NAMA_RUN)
+                if "--autostart" not in val:
+                    set_auto_start(True)
+            except Exception:
+                pass
     except Exception as galat:
         catat(f"Galat migrasi auto-start: {galat}")
     finally:
@@ -384,6 +416,10 @@ class KonektorTray:
             pystray.MenuItem("Mulai Otomatis Bersama Windows",
                              self._toggle_autostart,
                              checked=lambda item: auto_start_aktif()),
+            pystray.MenuItem("Sembunyi di Tray saat Mulai Otomatis",
+                             self._toggle_sembunyi_tray,
+                             checked=lambda item: sembunyi_tray_aktif(),
+                             enabled=lambda item: auto_start_aktif()),
             pystray.MenuItem("Buka Berkas Log", self._buka_log),
             pystray.MenuItem("Unduh Berkas Lain (Firmware & APK)",
                              self._buka_rilis),
@@ -418,8 +454,19 @@ class KonektorTray:
             return
         catat("Jendela UI siap — menutup jendela hanya menyembunyikannya "
               "ke tray.")
-        if "--buka-ui" in sys.argv:
+
+        # Tentukan apakah jendela harus langsung tampil
+        harus_tampil = True
+        if "--sembunyi-tray" in sys.argv:
+            harus_tampil = False
+        elif "--autostart" in sys.argv:
+            harus_tampil = not sembunyi_tray_aktif()
+        elif "--buka-ui" in sys.argv:
+            harus_tampil = True
+
+        if harus_tampil:
             self.jendela.tampilkan()
+
         try:
             self.jendela.jalankan()          # menghalangi sampai jendela ditutup
         finally:
@@ -437,7 +484,8 @@ class KonektorTray:
                     os.environ.setdefault(kunci, os.path.abspath(jalur))
             import ui_jendela
             return ui_jendela.siapkan(self, state, catat, BERKAS_LOG,
-                                      auto_start_aktif, set_auto_start)
+                                      auto_start_aktif, set_auto_start,
+                                      sembunyi_tray_aktif, set_sembunyi_tray)
         except Exception as galat:
             catat(f"Jendela UI tidak tersedia ({galat}) -> mode tray saja.")
             return None
@@ -483,6 +531,9 @@ class KonektorTray:
 
     def _toggle_autostart(self, icon, item):
         set_auto_start(not auto_start_aktif())
+
+    def _toggle_sembunyi_tray(self, icon, item):
+        set_sembunyi_tray(not sembunyi_tray_aktif())
 
     def _buka_log(self, icon, item):
         try:

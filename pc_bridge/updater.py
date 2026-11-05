@@ -49,6 +49,7 @@ CONFIG_BAWAAN = {
     "prefiks_aset": "halodeck-win",  # aset rilis yg dipakai, mis. "HaloDeck-Win-1.1.0.zip"
     "cek_otomatis": True,           # cek rilis tiap 24 jam
     "pasang_otomatis": False,       # True = langsung pasang tanpa konfirmasi
+    "sembunyi_tray_autostart": True, # Mulai tersembunyi di tray saat auto-start
 }
 
 # Sambungan ke pencatat log & pemberitahuan aplikasi induk
