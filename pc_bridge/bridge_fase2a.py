@@ -120,15 +120,21 @@ class ManajerSerial:
 
     def __init__(self, port_target, baud):
         self.port_target = port_target
+        self.port_aktif = None            # Port yang benar-benar terbuka
         self.baud = baud
         self.koneksi = None
         self.status_tersambung = False
 
     def cari_port(self):
-        """Cari port Wemos/CH340 secara otomatis bila port_target kosong."""
-        if self.port_target:
+        """Pakai port_target bila ada; kalau tidak, cari Wemos/CH340 otomatis.
+
+        Nomor COM papan CH340 berbeda di tiap PC (COM3, COM5, ...), jadi
+        port_target yang tidak terpasang tidak boleh menghalangi auto-cari.
+        """
+        daftar = serial.tools.list_ports.comports()
+        if self.port_target and any(p.device == self.port_target for p in daftar):
             return self.port_target
-        for p in serial.tools.list_ports.comports():
+        for p in daftar:
             if "CH340" in p.description or "CP210" in p.description:
                 return p.device
         return None
@@ -140,6 +146,7 @@ class ManajerSerial:
             return False
         try:
             self.koneksi = serial.Serial(port, self.baud, timeout=1)
+            self.port_aktif = port
             time.sleep(2)  # Tunggu ESP8266 reset setelah port dibuka
             self.koneksi.reset_input_buffer()
             self.status_tersambung = True
@@ -423,7 +430,7 @@ class ManajerOtomatis:
         if self.jalur == "jaringan" and self.jaringan_mgr.host_aktif:
             return f"Wi-Fi {self.jaringan_mgr.host_aktif}:{PORT_TCP_PC}"
         if self.jalur == "serial":
-            return f"USB {self.serial_mgr.port_target}"
+            return f"USB {self.serial_mgr.port_aktif or self.serial_mgr.port_target}"
         return "belum tersambung"
 
     def coba_sambung(self):
